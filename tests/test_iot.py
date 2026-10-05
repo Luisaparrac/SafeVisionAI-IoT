@@ -78,14 +78,21 @@ def test_sends_heartbeat_while_active():
     assert client.calls == [(1, ACTIVE), (1, ACTIVE)]
 
 
-def test_backend_failure_does_not_crash_and_retries():
-    client = FakeClient(fail=True)
-    monitor = make_monitor(["f", "f"], client)
-    monitor.step()
-    assert monitor.status is None
+def test_backend_failure_waits_before_retrying():
+    client, clock = FakeClient(fail=True), FakeClock()
+    monitor = make_monitor(["f"] * 4, client, clock)
+    attempts = []
+    original = client.update_camera_status
+    client.update_camera_status = lambda c, s: (attempts.append(clock.now), original(c, s))
+    monitor.step()            # fails at t=0
+    clock.now = 5
+    monitor.step()            # too soon: no new attempt
+    assert attempts == [0.0]
     client.fail = False
-    monitor.step()
+    clock.now = 11
+    monitor.step()            # retry after 10 s succeeds
     assert client.calls == [(1, ACTIVE)]
+    assert monitor.status == ACTIVE
 
 
 def test_event_payload_skips_empty_fields():
