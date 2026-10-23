@@ -1,0 +1,12 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+snapshot.jpg
+evidence/
+*.pt
+!models/.gitkeep
+runs/
+datasets/
+data.resolved.yaml
