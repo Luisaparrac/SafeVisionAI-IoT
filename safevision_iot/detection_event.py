@@ -1,4 +1,4 @@
-"""Event that the IoT module reports to the backend."""
+"""Event that the IoT module (or the AI module) reports to the backend."""
 from dataclasses import asdict, dataclass
 
 DETECTED_CLASSES = ("person", "dog", "cat", "other_animal")
@@ -7,11 +7,11 @@ DETECTED_CLASSES = ("person", "dog", "cat", "other_animal")
 @dataclass
 class DetectionEvent:
     camera_id: int
-    event_type: str                  # name in event_types, e.g. "Fall"
+    event_type: str                  
     subject_id: int | None = None
     zone_id: int | None = None
     detected_class: str = "person"
-    confidence: float | None = None  # 0..1
+    confidence: float | None = None  
     evidence_url: str | None = None
     description: str | None = None
 
