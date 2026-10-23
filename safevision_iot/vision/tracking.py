@@ -133,7 +133,7 @@ class TrackRegistry:
             box_height=detection.box.height,
             center=detection.box.center,
             floor_point=(fx / frame_width, fy / frame_height),
-            posture=self._posture.classify(person) if person else None,
+            posture=self._posture.classify(person, frame_height) if person else None,
             hip_y=self._posture.hip_height(person) if person else None,
             keypoints=None if person is None or person.keypoints is None else person.keypoints.copy(),
             keypoint_conf=None if person is None or person.keypoint_conf is None else person.keypoint_conf.copy(),
