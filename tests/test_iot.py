@@ -96,13 +96,13 @@ def test_backend_failure_waits_before_retrying():
 
 
 def test_event_payload_skips_empty_fields():
-    event = DetectionEvent(camera_id=1, event_type="Fall", confidence=0.9)
-    assert event.to_payload() == {"camera_id": 1, "event_type": "Fall",
+    event = DetectionEvent(camera_id=1, event_type="Caída", confidence=0.9)
+    assert event.to_payload() == {"camera_id": 1, "event_type": "Caída",
                                   "detected_class": "person", "confidence": 0.9}
 
 
 def test_event_rejects_invalid_values():
     with pytest.raises(ValueError):
-        DetectionEvent(camera_id=1, event_type="Fall", detected_class="robot")
+        DetectionEvent(camera_id=1, event_type="Caída", detected_class="robot")
     with pytest.raises(ValueError):
-        DetectionEvent(camera_id=1, event_type="Fall", confidence=1.5)
+        DetectionEvent(camera_id=1, event_type="Caída", confidence=1.5)
