@@ -124,7 +124,7 @@ class Preview:
             cv2.rectangle(image, (int(b.x1), int(b.y1)), (int(b.x2), int(b.y2)), color, 2)
             label = f"#{subject.track_id} {subject.detected_class}"
             if obs.posture:
-                label += f" {obs.posture.value}"
+                label += f" {obs.posture.label}"
             cv2.putText(image, label, (int(b.x1), max(int(b.y1) - 8, 14)),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2)
             if obs.keypoints is not None:
