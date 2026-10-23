@@ -1,13 +1,15 @@
 """Command line entry point.
 
-    python -m safevision_iot check-camera       test the camera and save a snapshot
-    python -m safevision_iot check-backend      test the backend and list event types
-    python -m safevision_iot send-test-event    create a test event in the backend
-    python -m safevision_iot run                keep the camera connected and report its status
+    python -m safevision_iot check-camera                 test the camera and save a snapshot
+    python -m safevision_iot check-backend                test the backend and list event types
+    python -m safevision_iot send-test-event              create a test event in the backend
+    python -m safevision_iot run [--show] [--no-ai]       camera + AI: report status and risk events
+    python -m safevision_iot analyze-video FILE [--show]  run the AI on a recorded video
 """
 import argparse
 import logging
 import sys
+import threading
 
 from safevision_iot.backend_client import BackendClient, BackendError
 from safevision_iot.camera import Camera
@@ -56,14 +58,56 @@ class IoTApp:
               f"({created['priority']}, {created['status']})")
         return 0
 
-    def run(self) -> int:
+    def run(self, use_ai: bool, show: bool, dry_run: bool) -> int:
+        """Camera status in a background thread; the AI in the main thread (it can open a window)."""
         settings = self._settings
+        client = None if dry_run else self._client
+        if not (use_ai and settings.ai_enabled):
+            monitor = CameraMonitor(self._new_camera(), self._client, settings.camera_id,
+                                    settings.heartbeat_seconds, settings.reconnect_seconds)
+            try:
+                monitor.run()
+            except KeyboardInterrupt:
+                print("\nStopped.")
+            return 0
+
+        from safevision_iot.vision.factory import build_pipeline
+        from safevision_iot.vision.pipeline import FrameBuffer
+
+        logging.getLogger("safevision").info("Loading YOLO models...")
+        pipeline = build_pipeline(settings, client, show)
+        buffer = FrameBuffer()
         monitor = CameraMonitor(self._new_camera(), self._client, settings.camera_id,
-                                settings.heartbeat_seconds, settings.reconnect_seconds)
+                                settings.heartbeat_seconds, settings.reconnect_seconds,
+                                on_frame=buffer.put)
+        stop = threading.Event()
+        camera_thread = threading.Thread(target=monitor.run, name="camera", daemon=True)
+        camera_thread.start()
         try:
-            monitor.run()
+            pipeline.run_live(buffer, settings.analysis_fps, stop)
         except KeyboardInterrupt:
             print("\nStopped.")
+        finally:
+            stop.set()
+            monitor.stop()
+            pipeline.reporter.wait_until_sent()
+            pipeline.close()
+        return 0
+
+    def analyze_video(self, path: str, show: bool, dry_run: bool) -> int:
+        from safevision_iot.vision.factory import build_pipeline
+
+        pipeline = build_pipeline(self._settings, None if dry_run else self._client, show)
+        try:
+            findings = pipeline.run_video(path, self._settings.analysis_fps)
+        except FileNotFoundError as exc:
+            print(exc)
+            return 1
+        finally:
+            pipeline.close()
+        pipeline.reporter.wait_until_sent()
+        print(f"Done: {len(findings)} event(s) detected"
+              + "".join(f"\n  - {f.event_type} ({f.detected_class}): {f.description}" for f in findings))
         return 0
 
     def _new_camera(self) -> Camera:
@@ -80,8 +124,15 @@ def main() -> None:
     commands.add_parser("check-camera", help="test the camera and save a snapshot")
     commands.add_parser("check-backend", help="test the backend connection")
     test_event = commands.add_parser("send-test-event", help="create a test event")
-    test_event.add_argument("--type", default="Fall", help="event type name (default: Fall)")
-    commands.add_parser("run", help="keep the camera connected and report its status")
+    test_event.add_argument("--type", default="Caída", help="event type name (default: Caída)")
+    run = commands.add_parser("run", help="camera status + AI detection")
+    run.add_argument("--show", action="store_true", help="open a window with the detections")
+    run.add_argument("--no-ai", action="store_true", help="only report the camera status")
+    run.add_argument("--dry-run", action="store_true", help="detect but do not send events")
+    video = commands.add_parser("analyze-video", help="run the AI on a recorded video")
+    video.add_argument("path")
+    video.add_argument("--show", action="store_true")
+    video.add_argument("--dry-run", action="store_true", help="detect but do not send events")
     args = parser.parse_args()
 
     app = IoTApp(Settings.from_env())
@@ -89,7 +140,8 @@ def main() -> None:
         "check-camera": app.check_camera,
         "check-backend": app.check_backend,
         "send-test-event": lambda: app.send_test_event(args.type),
-        "run": app.run,
+        "run": lambda: app.run(not args.no_ai, args.show, args.dry_run),
+        "analyze-video": lambda: app.analyze_video(args.path, args.show, args.dry_run),
     }
     sys.exit(actions[args.command]())
 
