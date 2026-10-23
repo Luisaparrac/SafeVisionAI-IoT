@@ -11,6 +11,12 @@ class Posture(Enum):
     STANDING = "standing"
     SITTING = "sitting"
     LYING = "lying"
+    UNKNOWN = "unknown"      
+
+    @property
+    def label(self) -> str:
+        return {"standing": "de pie", "sitting": "sentado", "lying": "acostado",
+                "unknown": "cuerpo no visible"}[self.value]
 
 
 class PostureClassifier:
@@ -23,7 +29,11 @@ class PostureClassifier:
     LYING_ANGLE = 60      # degrees from vertical
     STANDING_ANGLE = 35
 
-    def classify(self, person: PersonDetection) -> Posture:
+    def classify(self, person: PersonDetection, frame_height: int | None = None) -> Posture:
+        if not self.is_body_visible(person, frame_height):
+            # Only the face or the torso is in the image (the person is very close
+            # to the camera, or behind a desk): guessing would cause false falls.
+            return Posture.UNKNOWN
         ratio = person.box.height / person.box.width
         angle = self.torso_angle(person)
         if angle is not None:
@@ -35,6 +45,25 @@ class PostureClassifier:
         if ratio < 0.8:
             return Posture.LYING
         return Posture.STANDING if ratio > 1.6 else Posture.SITTING
+
+    @staticmethod
+    def is_body_visible(person: PersonDetection, frame_height: int | None = None) -> bool:
+        """Is enough of the body in the image to judge the posture?
+
+        No when the hips are not visible, or when the person fills the image from
+        top to bottom (sitting right in front of the camera). Legs are not
+        required: when someone lies on the floor the model often loses them.
+        """
+        if person.keypoints is None:
+            return True     # no keypoints at all: fall back to the box shape
+        if not (person.has_keypoints(LEFT_HIP) or person.has_keypoints(RIGHT_HIP)):
+            return False
+        if frame_height:
+            touches_top = person.box.y1 <= 0.02 * frame_height
+            touches_bottom = person.box.y2 >= 0.98 * frame_height
+            if (touches_top and touches_bottom) or person.box.height >= 0.9 * frame_height:
+                return False
+        return True
 
     @staticmethod
     def torso_angle(person: PersonDetection) -> float | None:
