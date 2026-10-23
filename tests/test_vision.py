@@ -67,6 +67,31 @@ def test_posture():
     assert classifier.classify(lying()) == Posture.LYING
 
 
+def upper_body_only(track=1) -> PersonDetection:
+    """Person sitting very close to the camera: face, shoulders and arms only."""
+    kps = np.zeros((17, 2))
+    kps[0] = [500, 50]
+    kps[5], kps[6] = [350, 300], [650, 300]
+    kps[7], kps[8] = [250, 500], [750, 500]
+    conf = np.where(kps.any(axis=1), 0.9, 0.0)
+    return PersonDetection(track, "person", Box(0, 0, 900, 590), 0.9, kps, conf)
+
+
+def test_partial_body_is_unknown_not_lying():
+    assert PostureClassifier().classify(upper_body_only(), frame_height=H) == Posture.UNKNOWN
+
+
+def test_lying_person_without_visible_legs_is_still_lying():
+    person = lying()
+    person.keypoint_conf[13:17] = 0.05            # the model loses the legs on the floor
+    assert PostureClassifier().classify(person, frame_height=H) == Posture.LYING
+
+
+def test_partial_body_never_triggers_a_fall():
+    frames = [standing()] * 10 + [upper_body_only()] * 30
+    assert FALL not in types(run(frames))
+
+
 # ---------- fall ----------
 def test_fall_is_detected_once():
     walk = [standing(300 + i * 4) for i in range(10)]
