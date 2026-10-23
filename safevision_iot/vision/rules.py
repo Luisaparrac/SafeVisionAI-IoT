@@ -100,7 +100,7 @@ class ImmobilityRule(Rule):
         still = now - subject.last_motion
         if still < limit:
             return None
-        posture = f", {subject.last.posture.value}" if subject.last.posture else ""
+        posture = f", {subject.last.posture.label}" if subject.last.posture else ""
         return Finding(IMMOBILITY, subject.track_id, subject.detected_class, subject.last.confidence,
                        f"Sin movimiento significativo durante {still:.0f} s{posture}")
 
