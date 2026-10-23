@@ -7,6 +7,10 @@ from safevision_iot.detection_event import DetectionEvent
 class BackendError(Exception):
     """The backend rejected the request or could not be reached."""
 
+    def __init__(self, message: str, retryable: bool = False):
+        super().__init__(message)
+        self.retryable = retryable   # True when trying again later may work
+
 
 class BackendClient:
     def __init__(self, base_url: str, api_key: str, timeout: float = 90):
@@ -33,6 +37,9 @@ class BackendClient:
     def list_event_types(self) -> list[dict]:
         return self._request("GET", "/api/tipos-evento")
 
+    def list_zones(self) -> list[dict]:
+        return self._request("GET", "/api/zonas")
+
     def _url(self, path: str) -> str:
         return f"{self._base_url}{path}"
 
@@ -40,9 +47,10 @@ class BackendClient:
         try:
             response = self._session.request(method, self._url(path), json=body, timeout=self._timeout)
         except requests.RequestException as exc:
-            raise BackendError(f"Backend not reachable: {exc.__class__.__name__}") from exc
+            raise BackendError(f"Backend not reachable: {exc.__class__.__name__}", retryable=True) from exc
         if response.status_code == 401:
             raise BackendError("Invalid IOT_API_KEY (401)")
         if not response.ok:
-            raise BackendError(f"{response.status_code}: {response.text[:200]}")
+            raise BackendError(f"{response.status_code}: {response.text[:200]}",
+                               retryable=response.status_code >= 500)
         return response.json()
