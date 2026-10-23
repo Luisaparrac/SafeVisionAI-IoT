@@ -42,7 +42,11 @@ class IoTApp:
         if not self._client.is_available():
             print("Backend not reachable. Check BACKEND_URL (Render may take ~1 min to wake up).")
             return 1
-        names = [t["name"] for t in self._client.list_event_types()]
+        try:
+            names = [t["name"] for t in self._client.list_event_types()]
+        except BackendError as exc:
+            print(f"Rejected: {exc}")
+            return 1
         print(f"OK. Event types: {', '.join(names)}")
         return 0
 
