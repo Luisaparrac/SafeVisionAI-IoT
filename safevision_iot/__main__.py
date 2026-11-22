@@ -4,6 +4,7 @@
     python -m safevision_iot check-backend                test the backend and list event types
     python -m safevision_iot send-test-event              create a test event in the backend
     python -m safevision_iot run [--show] [--no-ai]       camera + AI: report status and risk events
+                                 [--stream]               + live video for the web panel (:8080/video)
     python -m safevision_iot analyze-video FILE [--show]  run the AI on a recorded video
 """
 import argparse
@@ -62,41 +63,63 @@ class IoTApp:
               f"({created['priority']}, {created['status']})")
         return 0
 
-    def run(self, use_ai: bool, show: bool, dry_run: bool) -> int:
+    def run(self, use_ai: bool, show: bool, dry_run: bool, stream_video: bool = False) -> int:
         """Camera status in a background thread; the AI in the main thread (it can open a window)."""
         settings = self._settings
         client = None if dry_run else self._client
-        if not (use_ai and settings.ai_enabled):
+        stream, server = self._start_video(stream_video)
+        try:
+            if not (use_ai and settings.ai_enabled):
+                monitor = CameraMonitor(self._new_camera(), self._client, settings.camera_id,
+                                        settings.heartbeat_seconds, settings.reconnect_seconds,
+                                        on_frame=stream.publish if stream else None)
+                try:
+                    monitor.run()
+                except KeyboardInterrupt:
+                    print("\nStopped.")
+                return 0
+
+            from safevision_iot.vision.factory import build_pipeline
+            from safevision_iot.vision.pipeline import FrameBuffer
+
+            logging.getLogger("safevision").info("Loading YOLO models...")
+            pipeline = build_pipeline(settings, client, show, stream=stream)
+            buffer = FrameBuffer()
             monitor = CameraMonitor(self._new_camera(), self._client, settings.camera_id,
-                                    settings.heartbeat_seconds, settings.reconnect_seconds)
+                                    settings.heartbeat_seconds, settings.reconnect_seconds,
+                                    on_frame=buffer.put)
+            stop = threading.Event()
+            camera_thread = threading.Thread(target=monitor.run, name="camera", daemon=True)
+            camera_thread.start()
             try:
-                monitor.run()
+                pipeline.run_live(buffer, settings.analysis_fps, stop)
             except KeyboardInterrupt:
                 print("\nStopped.")
+            finally:
+                stop.set()
+                monitor.stop()
+                pipeline.reporter.wait_until_sent()
+                pipeline.close()
             return 0
-
-        from safevision_iot.vision.factory import build_pipeline
-        from safevision_iot.vision.pipeline import FrameBuffer
-
-        logging.getLogger("safevision").info("Loading YOLO models...")
-        pipeline = build_pipeline(settings, client, show)
-        buffer = FrameBuffer()
-        monitor = CameraMonitor(self._new_camera(), self._client, settings.camera_id,
-                                settings.heartbeat_seconds, settings.reconnect_seconds,
-                                on_frame=buffer.put)
-        stop = threading.Event()
-        camera_thread = threading.Thread(target=monitor.run, name="camera", daemon=True)
-        camera_thread.start()
-        try:
-            pipeline.run_live(buffer, settings.analysis_fps, stop)
-        except KeyboardInterrupt:
-            print("\nStopped.")
         finally:
-            stop.set()
-            monitor.stop()
-            pipeline.reporter.wait_until_sent()
-            pipeline.close()
-        return 0
+            if server:
+                server.stop()
+
+    def _start_video(self, enabled: bool):
+        """Starts the local MJPEG server for the web panel (only with --stream)."""
+        if not enabled:
+            return None, None
+        from safevision_iot.video_stream import VideoServer, VideoStream
+
+        stream = VideoStream()
+        try:
+            server = VideoServer(stream, self._settings.video_port,
+                                 evidence_dir=self._settings.evidence_dir)
+        except OSError:
+            sys.exit(f"El puerto {self._settings.video_port} está ocupado. Cambia VIDEO_PORT en .env")
+        server.start()
+        print(f"Video en vivo en http://localhost:{server.port}/video")
+        return stream, server
 
     def analyze_video(self, path: str, show: bool, dry_run: bool) -> int:
         from safevision_iot.vision.factory import build_pipeline
@@ -133,6 +156,8 @@ def main() -> None:
     run.add_argument("--show", action="store_true", help="open a window with the detections")
     run.add_argument("--no-ai", action="store_true", help="only report the camera status")
     run.add_argument("--dry-run", action="store_true", help="detect but do not send events")
+    run.add_argument("--stream", action="store_true",
+                     help="serve live video for the web panel at http://localhost:VIDEO_PORT/video")
     video = commands.add_parser("analyze-video", help="run the AI on a recorded video")
     video.add_argument("path")
     video.add_argument("--show", action="store_true")
@@ -144,7 +169,7 @@ def main() -> None:
         "check-camera": app.check_camera,
         "check-backend": app.check_backend,
         "send-test-event": lambda: app.send_test_event(args.type),
-        "run": lambda: app.run(not args.no_ai, args.show, args.dry_run),
+        "run": lambda: app.run(not args.no_ai, args.show, args.dry_run, args.stream),
         "analyze-video": lambda: app.analyze_video(args.path, args.show, args.dry_run),
     }
     sys.exit(actions[args.command]())
