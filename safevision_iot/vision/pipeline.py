@@ -2,6 +2,7 @@
 import logging
 import threading
 import time
+import unicodedata
 
 import cv2
 
@@ -37,7 +38,11 @@ class DetectionPipeline:
     """One analysis step: detectors -> analyzer -> reporter (and optional preview)."""
 
     def __init__(self, detectors: list[Detector], analyzer: SceneAnalyzer, reporter: EventReporter,
-                 fall_detector: Detector | None = None, preview: "Preview | None" = None):
+                 fall_detector: Detector | None = None, preview: "Preview | None" = None,
+                 stream=None):
+        """stream: optional VideoStream that receives the annotated image (web panel)."""
+        self._stream = stream
+        self._annotator = FrameAnnotator() if (preview or stream) else None
         self._detectors = detectors
         self._fall_detector = fall_detector
         self._analyzer = analyzer
@@ -61,8 +66,12 @@ class DetectionPipeline:
         findings = self._analyzer.process(FrameDetections(timestamp, width, height, items), fall_boxes)
         for finding in findings:
             self._reporter.report(finding, frame)
-        if self._preview:
-            self._preview.show(frame, self._analyzer.subjects, findings)
+        if self._annotator:
+            image = self._annotator.draw(frame, self._analyzer.subjects, findings)
+            if self._preview:
+                self._preview.show(image)
+            if self._stream:
+                self._stream.publish(image)
         return findings
 
     def run_live(self, buffer: FrameBuffer, fps: float, stop: threading.Event) -> None:
@@ -101,21 +110,25 @@ class DetectionPipeline:
         return findings
 
 
-class Preview:
-    """Window that draws each subject, its posture and the events (press q to close)."""
+def plain_text(text: str) -> str:
+    """OpenCV cannot draw accents: "Caída" -> "Caida"."""
+    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+
+
+class FrameAnnotator:
+    """Draws each subject, its posture and the recent alerts on a copy of the frame."""
 
     COLORS = {"person": (60, 200, 60), "dog": (255, 160, 40), "cat": (255, 160, 40),
               "other_animal": (255, 160, 40)}
 
-    def __init__(self, title: str = "SafeVision AI"):
-        self._title = title
+    def __init__(self, alert_seconds: float = 5):
+        self._alert_seconds = alert_seconds
         self._alerts: list[tuple[str, float]] = []
-        self.closed = False
 
-    def show(self, frame, subjects, findings: list[Finding]) -> None:
+    def draw(self, frame, subjects, findings: list[Finding]):
         image = frame.copy()
         now = time.time()
-        self._alerts = [(text, t) for text, t in self._alerts if now - t < 5]
+        self._alerts = [(text, t) for text, t in self._alerts if now - t < self._alert_seconds]
         self._alerts += [(f"{f.event_type} ({f.detected_class})", now) for f in findings]
         for subject in subjects.values():
             obs = subject.last
@@ -125,15 +138,26 @@ class Preview:
             label = f"#{subject.track_id} {subject.detected_class}"
             if obs.posture:
                 label += f" {obs.posture.label}"
-            cv2.putText(image, label, (int(b.x1), max(int(b.y1) - 8, 14)),
+            cv2.putText(image, plain_text(label), (int(b.x1), max(int(b.y1) - 8, 14)),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2)
             if obs.keypoints is not None:
                 for (x, y), c in zip(obs.keypoints.astype(int), obs.keypoint_conf):
                     if c > 0.3:
                         cv2.circle(image, (int(x), int(y)), 3, (0, 140, 255), -1)
         for i, (text, _) in enumerate(self._alerts):
-            cv2.putText(image, f"ALERTA: {text}", (12, 30 + 28 * i), cv2.FONT_HERSHEY_SIMPLEX,
+            cv2.putText(image, plain_text(f"ALERTA: {text}"), (12, 30 + 28 * i), cv2.FONT_HERSHEY_SIMPLEX,
                         0.75, (0, 0, 255), 2)
+        return image
+
+
+class Preview:
+    """Window that shows the annotated image (press q to close)."""
+
+    def __init__(self, title: str = "SafeVision AI"):
+        self._title = title
+        self.closed = False
+
+    def show(self, image) -> None:
         cv2.imshow(self._title, image)
         if cv2.waitKey(1) & 0xFF == ord("q"):
             self.closed = True
