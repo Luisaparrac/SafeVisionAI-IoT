@@ -12,7 +12,8 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from safevision_iot.vision.rules import ABNORMAL_MOVEMENT, FALL  # noqa: E402
+from safevision_iot.vision.rules import (ABNORMAL_MOVEMENT, CHILD_ON_FURNITURE,  # noqa: E402
+                                         CHILD_RISK_ZONE, COLLAPSE, FALL, PET_ON_FURNITURE)
 
 HIT = "Acierto"
 MISSED = "No detectado"
@@ -34,8 +35,13 @@ class ClipLabel:
         "desmayo_silla_": FALL,
         "actividad_anormal_": ABNORMAL_MOVEMENT,
         "actividad_normal_": None,
+        "mascota_mueble_": PET_ON_FURNITURE,
+        "nino_mueble_": CHILD_ON_FURNITURE,
+        "nino_zona_": CHILD_RISK_ZONE,
     }
-    RISK_EVENTS = (FALL, ABNORMAL_MOVEMENT)
+    RISK_EVENTS = (FALL, COLLAPSE, ABNORMAL_MOVEMENT, PET_ON_FURNITURE, CHILD_ON_FURNITURE,
+                   CHILD_RISK_ZONE)
+    EQUIVALENT = {FALL: {FALL, COLLAPSE}}
 
     @classmethod
     def from_filename(cls, filename: str) -> "ClipLabel":
@@ -48,7 +54,8 @@ class ClipLabel:
     def outcome(self, detected: set[str]) -> str:
         """Immobility is only informative: it never counts as an error."""
         if self.expected is not None:
-            return HIT if self.expected in detected else MISSED
+            accepted = self.EQUIVALENT.get(self.expected, {self.expected})
+            return HIT if detected & accepted else MISSED
         return FALSE_ALARM if detected.intersection(self.RISK_EVENTS) else HIT
 
 
