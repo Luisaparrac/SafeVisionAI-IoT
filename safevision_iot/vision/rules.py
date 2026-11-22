@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from safevision_iot.vision.detections import Box
+from safevision_iot.vision.detections import Box, FrameDetections, FurnitureDetection
 from safevision_iot.vision.posture import Posture
 from safevision_iot.vision.tracking import Observation, TrackedSubject
 from safevision_iot.vision.zone import Zone
@@ -20,6 +20,13 @@ FALL = "Caída"
 IMMOBILITY = "Inmovilidad prolongada"
 RESTRICTED_ZONE = "Permanencia en zona restringida"
 ABNORMAL_MOVEMENT = "Movimiento anormal"
+COLLAPSE = "Colapso"
+PET_ON_FURNITURE = "Mascota sobre mueble"
+CHILD_ON_FURNITURE = "Niño subido a mueble"
+CHILD_RISK_ZONE = "Niño en zona de riesgo"
+
+FURNITURE_NAMES = {"chair": "silla", "couch": "sofá", "bed": "cama", "dining table": "mesa"}
+PET_NAMES = {"dog": "perro", "cat": "gato"}
 
 
 @dataclass
@@ -31,11 +38,15 @@ class Finding:
     confidence: float
     description: str
     zone_id: int | None = None
+    is_child: bool = False
 
 
 class Rule(ABC):
     @abstractmethod
     def evaluate(self, subject: TrackedSubject, now: float) -> Finding | None: ...
+
+    def observe_frame(self, frame: FrameDetections) -> None:
+        """Called once per frame, before evaluating the subjects."""
 
     def forget(self, track_id: int) -> None:
         """Called when a subject leaves the scene."""
@@ -113,11 +124,14 @@ class RestrictedZoneRule(Rule):
 
     The position used is the bottom center of the box (where the feet or paws
     touch the floor), relative to the image size, like the zone coordinates.
+    A child generates a different event, so the rule waits up to `age_wait`
+    extra seconds for the age votes before deciding which event to report.
     """
 
-    def __init__(self, zones: Callable[[], list[Zone]], dwell: float = 2.0):
+    def __init__(self, zones: Callable[[], list[Zone]], dwell: float = 2.0, age_wait: float = 3.0):
         self._zones = zones
         self._dwell = dwell
+        self._age_wait = age_wait
         self._entered: dict[tuple[int, int], float] = {}   # (track_id, zone_id) -> since
         self._reported: set[tuple[int, int]] = set()
 
@@ -130,11 +144,15 @@ class RestrictedZoneRule(Rule):
                 self._reported.discard(key)
                 continue
             since = self._entered.setdefault(key, now)
+            if subject.age_pending and now - since < self._dwell + self._age_wait:
+                continue
             if now - since >= self._dwell and key not in self._reported:
                 self._reported.add(key)
-                return Finding(RESTRICTED_ZONE, subject.track_id, subject.detected_class,
+                event = CHILD_RISK_ZONE if subject.is_child else RESTRICTED_ZONE
+                who = f"{subject.age_label}: " if subject.age_label else ""
+                return Finding(event, subject.track_id, subject.detected_class,
                                subject.last.confidence,
-                               f"En la zona '{zone.name}' durante {now - since:.0f} s",
+                               f"{who}en la zona '{zone.name}' durante {now - since:.0f} s",
                                zone_id=zone.zone_id)
         return None
 
@@ -142,6 +160,97 @@ class RestrictedZoneRule(Rule):
         for key in [k for k in self._entered if k[0] == track_id]:
             del self._entered[key]
         self._reported = {k for k in self._reported if k[0] != track_id}
+
+
+class FurnitureRule(Rule):
+    """Template: the subject stays on a piece of furniture for `seconds`."""
+
+    def __init__(self, seconds: float):
+        self._seconds = seconds
+        self._furniture: list[FurnitureDetection] = []
+        self._since: dict[int, float] = {}
+        self._reported: set[int] = set()
+
+    def observe_frame(self, frame: FrameDetections) -> None:
+        self._furniture = frame.furniture
+
+    def evaluate(self, subject: TrackedSubject, now: float) -> Finding | None:
+        tid = subject.track_id
+        item = None
+        if self._applies(subject):
+            item = next((f for f in self._furniture if self._is_on(subject, f)), None)
+        if item is None:
+            self._since.pop(tid, None)
+            self._reported.discard(tid)
+            return None
+        since = self._since.setdefault(tid, now)
+        if now - since < self._seconds or tid in self._reported:
+            return None
+        self._reported.add(tid)
+        return self._finding(subject, item, now - since)
+
+    def forget(self, track_id: int) -> None:
+        self._since.pop(track_id, None)
+        self._reported.discard(track_id)
+
+    @abstractmethod
+    def _applies(self, subject: TrackedSubject) -> bool: ...
+
+    @abstractmethod
+    def _is_on(self, subject: TrackedSubject, item: FurnitureDetection) -> bool: ...
+
+    @abstractmethod
+    def _finding(self, subject: TrackedSubject, item: FurnitureDetection, seconds: float) -> Finding: ...
+
+
+class PetOnFurnitureRule(FurnitureRule):
+    """A dog or cat overlaps a couch, bed or table and its paws are above the floor line."""
+
+    FURNITURE = ("couch", "bed", "dining table")
+    MIN_OVERLAP = 0.5
+    HEIGHT_LIMIT = 0.8      # fraction of the furniture height, from its top
+
+    def __init__(self, seconds: float = 3.0):
+        super().__init__(seconds)
+
+    def _applies(self, subject: TrackedSubject) -> bool:
+        return subject.detected_class in PET_NAMES
+
+    def _is_on(self, subject: TrackedSubject, item: FurnitureDetection) -> bool:
+        if item.detected_class not in self.FURNITURE:
+            return False
+        box = subject.last.box
+        limit = item.box.y1 + self.HEIGHT_LIMIT * item.box.height
+        return _overlap_ratio(box, item.box) >= self.MIN_OVERLAP and box.y2 <= limit
+
+    def _finding(self, subject: TrackedSubject, item: FurnitureDetection, seconds: float) -> Finding:
+        pet, furniture = PET_NAMES[subject.detected_class], FURNITURE_NAMES[item.detected_class]
+        return Finding(PET_ON_FURNITURE, subject.track_id, subject.detected_class, subject.last.confidence,
+                       f"Mascota sobre mueble: {pet} sobre {furniture} durante {seconds:.0f} s")
+
+
+class ChildOnFurnitureRule(FurnitureRule):
+    """A child's feet are on a piece of furniture. Sitting on a chair is normal."""
+
+    HEIGHT_LIMIT = 0.75     # fraction of the furniture height, from its top
+
+    def __init__(self, seconds: float = 2.0):
+        super().__init__(seconds)
+
+    def _applies(self, subject: TrackedSubject) -> bool:
+        return subject.is_person and subject.is_child
+
+    def _is_on(self, subject: TrackedSubject, item: FurnitureDetection) -> bool:
+        if item.detected_class == "chair" and subject.last.posture == Posture.SITTING:
+            return False
+        x, y = subject.last.box.bottom_center
+        limit = item.box.y1 + self.HEIGHT_LIMIT * item.box.height
+        return item.box.x1 <= x <= item.box.x2 and item.box.y1 <= y <= limit
+
+    def _finding(self, subject: TrackedSubject, item: FurnitureDetection, seconds: float) -> Finding:
+        furniture = FURNITURE_NAMES[item.detected_class]
+        return Finding(CHILD_ON_FURNITURE, subject.track_id, "person", subject.last.confidence,
+                       f"Niño subido a mueble: {subject.age_label} sobre {furniture} durante {seconds:.0f} s")
 
 
 class AbnormalMovementRule(Rule):
@@ -260,6 +369,13 @@ class TrainedFallRule(Rule):
             if _iou(person, box) >= self._min_overlap and (best is None or confidence > best):
                 best = confidence
         return best
+
+
+def _overlap_ratio(box: Box, other: Box) -> float:
+    """Fraction of `box` that is inside `other`."""
+    ix = max(0.0, min(box.x2, other.x2) - max(box.x1, other.x1))
+    iy = max(0.0, min(box.y2, other.y2) - max(box.y1, other.y1))
+    return ix * iy / (box.width * box.height)
 
 
 def _iou(a: Box, b: Box) -> float:
