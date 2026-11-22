@@ -46,6 +46,10 @@ class Settings:
     zones_refresh_seconds: float
     evidence_dir: str
 
+    # Live video for the web panel
+    video_port: int
+    evidence_base_url: str
+
     @classmethod
     def from_env(cls) -> "Settings":
         load_dotenv()
@@ -79,4 +83,6 @@ class Settings:
             event_cooldown_seconds=float(env("EVENT_COOLDOWN_SECONDS", "60")),
             zones_refresh_seconds=float(env("ZONES_REFRESH_SECONDS", "300")),
             evidence_dir=env("EVIDENCE_DIR", "evidence"),
+            video_port=int(env("VIDEO_PORT", "8080")),
+            evidence_base_url=env("EVIDENCE_BASE_URL", "").strip().rstrip("/"),
         )
