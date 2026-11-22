@@ -6,7 +6,8 @@ from safevision_iot.vision.analyzer import Cooldown, SceneAnalyzer
 from safevision_iot.vision.detectors import AnimalDetector, PoseDetector, TrainedFallDetector
 from safevision_iot.vision.pipeline import DetectionPipeline, Preview
 from safevision_iot.vision.posture import PostureClassifier
-from safevision_iot.vision.rules import FallRule, ImmobilityRule, RestrictedZoneRule, TrainedFallRule
+from safevision_iot.vision.rules import (AbnormalMovementRule, FallRule, ImmobilityRule,
+                                         RestrictedZoneRule, TrainedFallRule)
 from safevision_iot.vision.tracking import TrackRegistry
 from safevision_iot.vision.zone_provider import ZoneProvider
 
@@ -22,6 +23,9 @@ def build_pipeline(settings: Settings, client: BackendClient | None, show: bool 
         FallRule(settings.fall_window_seconds, settings.fall_drop_ratio, settings.fall_confirm_seconds),
         ImmobilityRule(settings.person_immobility_seconds, settings.pet_immobility_seconds),
         RestrictedZoneRule(zones, settings.zone_dwell_seconds),
+        AbnormalMovementRule(settings.abnormal_speed, settings.abnormal_min_peaks,
+                             settings.abnormal_window_seconds, settings.abnormal_max_hip_speed,
+                             settings.abnormal_settle_seconds),
     ]
     fall_detector = None
     if settings.fall_model:
