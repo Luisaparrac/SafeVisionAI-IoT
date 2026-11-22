@@ -24,8 +24,10 @@ class EventReporter:
 
     def __init__(self, client: BackendClient | None, camera_id: int, evidence_dir: str,
                  person_subject_id: int | None = None, pet_subject_id: int | None = None,
-                 max_pending: int = 100, evidence_base_url: str = ""):
+                 max_pending: int = 100, evidence_base_url: str = "",
+                 child_subject_id: int | None = None):
         self._evidence_base_url = evidence_base_url.rstrip("/")
+        self._child_subject_id = child_subject_id
         self._client = client
         self._camera_id = camera_id
         self._evidence_dir = Path(evidence_dir)
@@ -51,6 +53,8 @@ class EventReporter:
 
     def to_event(self, finding: Finding, evidence: Path | None = None) -> DetectionEvent:
         subject_id = self._person_subject_id if finding.detected_class == "person" else self._pet_subject_id
+        if finding.is_child and self._child_subject_id is not None:
+            subject_id = self._child_subject_id
         description = finding.description + (f". Evidencia: {evidence.name}" if evidence else "")
         return DetectionEvent(
             camera_id=self._camera_id,
