@@ -8,6 +8,7 @@ del backend.
 | Evento | Quién | Cómo se detecta |
 |---|---|---|
 | Caída | Personas | YOLO Pose + reglas de postura; opcionalmente, un modelo entrenado por el equipo |
+| Movimiento anormal | Personas | Movimientos bruscos y repetidos de los brazos, como lanzar objetos |
 | Inmovilidad prolongada | Personas y mascotas | Los puntos del cuerpo o la posición casi no cambian durante un tiempo |
 | Permanencia en zona restringida | Personas y mascotas | La persona o el animal permanece dentro de una zona marcada en la tabla `zones` |
 
@@ -59,6 +60,12 @@ como *de pie*, *sentada* o *acostada*.
 
 Si se levanta antes de esos 2 s, no se considera caída.
 
+**Movimiento anormal.** Se mide la velocidad de las muñecas en alturas de cuerpo por segundo, para
+que no dependa de la distancia a la cámara. Un movimiento es brusco si supera 0,8 alturas por
+segundo. Se genera el evento con al menos 5 movimientos bruscos en 3 s. Para no confundirlo con una
+caída, no cuentan los movimientos si la persona está acostada, si la cadera baja rápido o si queda
+acostada en el segundo siguiente; por eso la alerta sale alrededor de 1 s después.
+
 **Inmovilidad prolongada.** Se mide cuánto se mueven los puntos del cuerpo entre cuadros, en
 proporción al tamaño de la persona. Si casi no hay movimiento durante 60 s (30 min para mascotas),
 se genera el evento.
@@ -95,7 +102,7 @@ Cada clase tiene una sola responsabilidad y está en su propio archivo.
 | `Detector` → `PoseDetector`, `AnimalDetector`, `TrainedFallDetector` | `vision/detectors.py` | Ejecutar los modelos YOLO |
 | `PostureClassifier` | `vision/posture.py` | Clasificar la postura de una persona |
 | `TrackRegistry`, `TrackedSubject` | `vision/tracking.py` | Seguir a cada persona o animal y guardar su historial |
-| `Rule` → `FallRule`, `ImmobilityRule`, `RestrictedZoneRule`, `TrainedFallRule` | `vision/rules.py` | Decidir si hay un evento de riesgo |
+| `Rule` → `FallRule`, `AbnormalMovementRule`, `ImmobilityRule`, `RestrictedZoneRule`, `TrainedFallRule` | `vision/rules.py` | Decidir si hay un evento de riesgo |
 | `Zone`, `ZoneProvider` | `vision/zone.py`, `vision/zone_provider.py` | Representar las zonas y cargarlas del backend |
 | `SceneAnalyzer`, `Cooldown` | `vision/analyzer.py` | Aplicar todas las reglas a todos los sujetos y evitar repeticiones |
 | `FrameBuffer`, `DetectionPipeline`, `Preview` | `vision/pipeline.py` | Unir cámara, modelos, reglas y envío; ventana de vista previa |
