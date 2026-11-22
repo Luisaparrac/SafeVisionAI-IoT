@@ -34,6 +34,11 @@ class Settings:
     fall_window_seconds: float
     fall_drop_ratio: float
     fall_confirm_seconds: float
+    abnormal_speed: float
+    abnormal_min_peaks: int
+    abnormal_window_seconds: float
+    abnormal_max_hip_speed: float
+    abnormal_settle_seconds: float
     person_immobility_seconds: float
     pet_immobility_seconds: float
     zone_dwell_seconds: float
@@ -63,6 +68,11 @@ class Settings:
             fall_window_seconds=float(env("FALL_WINDOW_SECONDS", "1.5")),
             fall_drop_ratio=float(env("FALL_DROP_RATIO", "0.3")),
             fall_confirm_seconds=float(env("FALL_CONFIRM_SECONDS", "2")),
+            abnormal_speed=float(env("ABNORMAL_SPEED", "0.8")),
+            abnormal_min_peaks=int(env("ABNORMAL_MIN_PEAKS", "5")),
+            abnormal_window_seconds=float(env("ABNORMAL_WINDOW_SECONDS", "3")),
+            abnormal_max_hip_speed=float(env("ABNORMAL_MAX_HIP_SPEED", "0.5")),
+            abnormal_settle_seconds=float(env("ABNORMAL_SETTLE_SECONDS", "1")),
             person_immobility_seconds=float(env("PERSON_IMMOBILITY_SECONDS", "60")),
             pet_immobility_seconds=float(env("PET_IMMOBILITY_SECONDS", "1800")),
             zone_dwell_seconds=float(env("ZONE_DWELL_SECONDS", "2")),
