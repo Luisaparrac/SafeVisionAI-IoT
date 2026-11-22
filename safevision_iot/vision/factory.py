@@ -3,11 +3,13 @@ from safevision_iot.backend_client import BackendClient
 from safevision_iot.event_reporter import EventReporter
 from safevision_iot.settings import Settings
 from safevision_iot.vision.analyzer import Cooldown, SceneAnalyzer
-from safevision_iot.vision.detectors import AnimalDetector, PoseDetector, TrainedFallDetector
+from safevision_iot.vision.detectors import (AnimalDetector, ChildClassifier, PoseDetector,
+                                             TrainedFallDetector)
 from safevision_iot.vision.pipeline import DetectionPipeline, Preview
 from safevision_iot.vision.posture import PostureClassifier
-from safevision_iot.vision.rules import (AbnormalMovementRule, FallRule, ImmobilityRule,
-                                         RestrictedZoneRule, TrainedFallRule)
+from safevision_iot.vision.rules import (AbnormalMovementRule, ChildOnFurnitureRule, FallRule,
+                                         ImmobilityRule, PetOnFurnitureRule, RestrictedZoneRule,
+                                         TrainedFallRule)
 from safevision_iot.vision.tracking import TrackRegistry
 from safevision_iot.vision.zone_provider import ZoneProvider
 
@@ -26,17 +28,24 @@ def build_pipeline(settings: Settings, client: BackendClient | None, show: bool 
         AbnormalMovementRule(settings.abnormal_speed, settings.abnormal_min_peaks,
                              settings.abnormal_window_seconds, settings.abnormal_max_hip_speed,
                              settings.abnormal_settle_seconds),
+        PetOnFurnitureRule(settings.pet_furniture_seconds),
     ]
+    age_classifier = None
+    if settings.child_model:
+        age_classifier = ChildClassifier(settings.child_model).classify
+        rules.append(ChildOnFurnitureRule(settings.child_furniture_seconds))
     fall_detector = None
     if settings.fall_model:
         fall_detector = TrainedFallDetector(settings.fall_model)
         rules.append(TrainedFallRule(settings.fall_confirm_seconds))
 
-    analyzer = SceneAnalyzer(TrackRegistry(PostureClassifier()), rules,
-                             Cooldown(settings.event_cooldown_seconds))
+    registry = TrackRegistry(PostureClassifier(), age_classifier=age_classifier,
+                             child_min_votes=settings.child_min_votes)
+    analyzer = SceneAnalyzer(registry, rules, Cooldown(settings.event_cooldown_seconds))
     reporter = EventReporter(client, settings.camera_id, settings.evidence_dir,
                              settings.person_subject_id, settings.pet_subject_id,
-                             evidence_base_url=settings.evidence_base_url)
+                             evidence_base_url=settings.evidence_base_url,
+                             child_subject_id=settings.child_subject_id)
     detectors = [PoseDetector(settings.pose_model), AnimalDetector(settings.animal_model)]
     return DetectionPipeline(detectors, analyzer, reporter, fall_detector,
                              Preview() if show else None, stream)
