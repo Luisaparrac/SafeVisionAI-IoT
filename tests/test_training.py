@@ -6,6 +6,7 @@ import pytest
 from safevision_iot.vision.rules import ABNORMAL_MOVEMENT, FALL, IMMOBILITY
 from training.evaluate_videos import (FALSE_ALARM, HIT, MISSED, ClipLabel, ClipResult,
                                       EvaluationReport)
+from training.train_fall_model import DatasetChecker
 
 
 @pytest.mark.parametrize("name", ["caida_al_frente_1.mp4", "caida_al_lado_2.mp4", "caida_atras_3.mp4",
@@ -62,3 +63,18 @@ def test_report_summary_and_csv(tmp_path):
         rows = list(csv.reader(file))
     assert rows[0] == ["clip", "evento_esperado", "eventos_detectados", "resultado"]
     assert rows[2] == ["b.mp4", FALL, "Ninguno", MISSED]
+
+
+def test_checker_finds_images_of_roboflow_export(tmp_path):
+    dataset = tmp_path / "export" / "dataset"
+    for split in ("train", "valid"):
+        (dataset / split / "images").mkdir(parents=True)
+        (dataset / split / "images" / "photo.jpg").write_bytes(b"fake")
+    data_yaml = dataset / "data.yaml"
+    data_yaml.write_text("train: ../train/images\nval: ../valid/images\nnames: [fall, person]\n",
+                         encoding="utf-8")
+
+    checker = DatasetChecker(data_yaml)
+    assert checker.check() == []
+    assert checker.split_folder("train") == (dataset / "train" / "images").resolve()
+    assert checker.split_folder("val") == (dataset / "valid" / "images").resolve()
