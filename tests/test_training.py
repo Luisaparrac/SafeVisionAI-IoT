@@ -78,3 +78,47 @@ def test_checker_finds_images_of_roboflow_export(tmp_path):
     assert checker.check() == []
     assert checker.split_folder("train") == (dataset / "train" / "images").resolve()
     assert checker.split_folder("val") == (dataset / "valid" / "images").resolve()
+
+
+def fake_detection_dataset(root, images=10):
+    (root / "train" / "images").mkdir(parents=True)
+    (root / "train" / "labels").mkdir(parents=True)
+    for i in range(images):
+        (root / "train" / "images" / f"p{i}.jpg").write_bytes(b"fake")
+        (root / "train" / "labels" / f"p{i}.txt").write_text("0 0.5 0.5 0.2 0.2\n", encoding="utf-8")
+    data_yaml = root / "data.yaml"
+    data_yaml.write_text("train: ../train/images\nval: ../valid/images\nnames: [fall, person]\n",
+                         encoding="utf-8")
+    return data_yaml
+
+
+def test_missing_validation_is_created_with_20_percent(tmp_path):
+    root = tmp_path / "export" / "dataset"
+    checker = DatasetChecker(fake_detection_dataset(root))
+
+    assert checker.ensure_validation() == 2
+    assert checker.check() == []
+    val_images = {p.stem for p in (root / "valid" / "images").iterdir()}
+    val_labels = {p.stem for p in (root / "valid" / "labels").iterdir()}
+    train_images = {p.stem for p in (root / "train" / "images").iterdir()}
+    assert len(val_images) == 2 and val_images == val_labels
+    assert len(train_images) == 8 and not train_images & val_images
+
+
+def test_validation_split_is_repeatable(tmp_path):
+    chosen = []
+    for name in ("a", "b"):
+        root = tmp_path / name / "export" / "dataset"
+        DatasetChecker(fake_detection_dataset(root)).ensure_validation()
+        chosen.append({p.name for p in (root / "valid" / "images").iterdir()})
+    assert chosen[0] == chosen[1]
+
+
+def test_existing_validation_is_not_touched(tmp_path):
+    root = tmp_path / "export" / "dataset"
+    data_yaml = fake_detection_dataset(root)
+    (root / "valid" / "images").mkdir(parents=True)
+    (root / "valid" / "images" / "v.jpg").write_bytes(b"fake")
+
+    assert DatasetChecker(data_yaml).ensure_validation() == 0
+    assert len(list((root / "train" / "images").iterdir())) == 10
