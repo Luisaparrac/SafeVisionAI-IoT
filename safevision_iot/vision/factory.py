@@ -13,7 +13,7 @@ from safevision_iot.vision.zone_provider import ZoneProvider
 
 
 def build_pipeline(settings: Settings, client: BackendClient | None, show: bool = False,
-                   zones=None) -> DetectionPipeline:
+                   zones=None, stream=None) -> DetectionPipeline:
     """client=None runs the AI without sending anything (dry run)."""
     if zones is None:
         zones = (ZoneProvider(client, settings.camera_id, settings.zones_refresh_seconds)
@@ -35,7 +35,8 @@ def build_pipeline(settings: Settings, client: BackendClient | None, show: bool 
     analyzer = SceneAnalyzer(TrackRegistry(PostureClassifier()), rules,
                              Cooldown(settings.event_cooldown_seconds))
     reporter = EventReporter(client, settings.camera_id, settings.evidence_dir,
-                             settings.person_subject_id, settings.pet_subject_id)
+                             settings.person_subject_id, settings.pet_subject_id,
+                             evidence_base_url=settings.evidence_base_url)
     detectors = [PoseDetector(settings.pose_model), AnimalDetector(settings.animal_model)]
     return DetectionPipeline(detectors, analyzer, reporter, fall_detector,
-                             Preview() if show else None)
+                             Preview() if show else None, stream)
