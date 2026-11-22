@@ -11,6 +11,9 @@ del backend.
 | Movimiento anormal | Personas | Movimientos bruscos y repetidos de los brazos, como lanzar objetos |
 | Inmovilidad prolongada | Personas y mascotas | Los puntos del cuerpo o la posición casi no cambian durante un tiempo |
 | Permanencia en zona restringida | Personas y mascotas | La persona o el animal permanece dentro de una zona marcada en la tabla `zones` |
+| Mascota sobre mueble | Perros y gatos | La mascota permanece sobre un sofá, una cama o una mesa |
+| Niño subido a mueble | Niños | Los pies del niño están sobre un mueble durante un tiempo |
+| Niño en zona de riesgo | Niños | Un niño permanece dentro de una zona marcada en la tabla `zones` |
 
 La IA entrega una **detección preventiva**: reconoce patrones visibles de movimiento, no hace
 diagnósticos médicos.
@@ -87,6 +90,50 @@ caídas en formato YOLO; esa técnica se llama *transfer learning*. Al configura
 `FALL_MODEL=models/fall_model.pt`, el módulo usa ese modelo **además** de las reglas: una caída se
 confirma cuando el modelo marca a la persona como caída durante 2 s.
 
+## Travesuras de niños y mascotas
+
+La detección funciona en dos etapas:
+
+1. **Modelos.** YOLO encuentra personas, mascotas y muebles (silla, sofá, cama y mesa). Un clasificador
+   YOLO11n-cls (`CHILD_MODEL`) analiza a cada persona hasta 2 veces por segundo.
+2. **Reglas.** Cada persona acumula sus últimos 15 votos y se considera niño por mayoría, con al menos
+   `CHILD_MIN_VOTES` votos. Después se aplican las reglas:
+
+| Regla | Condición |
+|---|---|
+| Mascota sobre mueble | Perro o gato con al menos 50 % de su caja sobre un sofá, cama o mesa, y patas por encima del 80 % de la altura del mueble, durante 3 s |
+| Niño subido a mueble | Pies dentro del mueble y por encima del 75 % de su altura, medida desde arriba, durante 2 s. Estar sentado en una silla no cuenta |
+| Niño en zona de riesgo | Un niño permanece en una zona restringida. La regla espera hasta 3 s adicionales a que termine la votación de edad |
+
+En la base de datos `detected_class` sigue siendo `person`. Si `CHILD_SUBJECT_ID` está configurado, se
+usa como `subject_id`. Sin `CHILD_MODEL`, las reglas de niños quedan desactivadas.
+
+## Video en vivo en el panel web
+
+Con `--stream`, el módulo publica la imagen anotada en formato **MJPEG**, que el navegador muestra con
+una etiqueta `<img>`:
+
+```bash
+python -m safevision_iot run --stream
+```
+
+| Ruta | Contenido |
+|---|---|
+| `http://localhost:8080/video` | Video en vivo |
+| `http://localhost:8080/snapshot.jpg` | Última imagen |
+| `http://localhost:8080/health` | Estado del video |
+| `http://localhost:8080/evidence/<archivo>.jpg` | Foto de un evento |
+
+El puerto se cambia con `VIDEO_PORT`. Si `EVIDENCE_BASE_URL` está configurado, cada evento envía la
+dirección de su foto en `evidence_url`.
+
+El módulo **no envía el video al backend**: se sirve desde el computador local. Cuando el panel web
+está publicado en HTTPS, Chrome pide el permiso de **acceso a la red local**; hay que permitirlo para
+ver el video.
+
+**Importante:** el servidor no tiene contraseña, escucha en toda la red local y permite solicitudes
+desde cualquier origen. Úsalo solo en una red de confianza.
+
 ## Diseño orientado a objetos
 
 Cada clase tiene una sola responsabilidad y está en su propio archivo.
@@ -99,13 +146,15 @@ Cada clase tiene una sola responsabilidad y está en su propio archivo.
 | `BackendClient` | `backend_client.py` | Comunicarse con la API del backend |
 | `DetectionEvent` | `detection_event.py` | Representar y validar un evento antes de enviarlo |
 | `EventReporter` | `event_reporter.py` | Convertir hallazgos en eventos, guardar la evidencia y enviarlos en segundo plano |
-| `Detector` → `PoseDetector`, `AnimalDetector`, `TrainedFallDetector` | `vision/detectors.py` | Ejecutar los modelos YOLO |
+| `VideoStream`, `VideoServer`, `EvidenceStore` | `video_stream.py` | Publicar el video en vivo en MJPEG y servir las fotos de evidencia |
+| `Detector` → `PoseDetector`, `AnimalDetector`, `TrainedFallDetector` | `vision/detectors.py` | Ejecutar los modelos YOLO; `AnimalDetector` también encuentra muebles |
+| `ChildClassifier` | `vision/detectors.py` | Clasificar a cada persona como niño o adulto |
 | `PostureClassifier` | `vision/posture.py` | Clasificar la postura de una persona |
 | `TrackRegistry`, `TrackedSubject` | `vision/tracking.py` | Seguir a cada persona o animal y guardar su historial |
-| `Rule` → `FallRule`, `AbnormalMovementRule`, `ImmobilityRule`, `RestrictedZoneRule`, `TrainedFallRule` | `vision/rules.py` | Decidir si hay un evento de riesgo |
+| `Rule` → `FallRule`, `AbnormalMovementRule`, `ImmobilityRule`, `RestrictedZoneRule`, `TrainedFallRule`, `FurnitureRule` → `PetOnFurnitureRule`, `ChildOnFurnitureRule` | `vision/rules.py` | Decidir si hay un evento de riesgo |
 | `Zone`, `ZoneProvider` | `vision/zone.py`, `vision/zone_provider.py` | Representar las zonas y cargarlas del backend |
 | `SceneAnalyzer`, `Cooldown` | `vision/analyzer.py` | Aplicar todas las reglas a todos los sujetos y evitar repeticiones |
-| `FrameBuffer`, `DetectionPipeline`, `Preview` | `vision/pipeline.py` | Unir cámara, modelos, reglas y envío; ventana de vista previa |
+| `FrameBuffer`, `DetectionPipeline`, `FrameAnnotator`, `Preview` | `vision/pipeline.py` | Unir cámara, modelos, reglas y envío; dibujar las detecciones; ventana de vista previa |
 | `IoTApp` | `__main__.py` | Comandos del módulo |
 
 Principios aplicados:
@@ -150,6 +199,7 @@ del módulo IoT y, si se quiere, el `subject_id` de la persona y de la mascota s
 | `python -m safevision_iot send-test-event --type "Caída"` | Registra un evento de prueba |
 | `python -m safevision_iot run --show` | Cámara + IA en vivo, con una ventana que muestra las detecciones (q para cerrar) |
 | `python -m safevision_iot run --no-ai` | Solo reporta el estado de la cámara |
+| `python -m safevision_iot run --stream` | Agrega el video en vivo para el panel web (también funciona con `--no-ai`) |
 | `python -m safevision_iot analyze-video video.mp4 --show` | Analiza un video grabado (para pruebas y demostraciones) |
 
 Agregar `--dry-run` a `run` o `analyze-video` detecta sin enviar eventos al backend.
