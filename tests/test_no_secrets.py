@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parent.parent
 class SecretScanner:
     """Finds secrets in a text. It reports only their kind, never their value."""
 
-    API_KEY = re.compile(r"api_key\s*[=:]\s*\\?[\"']([^\"'\\]+)", re.IGNORECASE)
+    API_KEY = re.compile(r"api_key\s*[=:]\s*\\?[\"']([^\"'\\\s]+)", re.IGNORECASE)
     RTSP = re.compile(r"rtsp://([^:/\s@]+):([^@\s/]+)@")
     IOT_KEY = re.compile(r"^\s*#?\s*IOT_API_KEY[ \t]*=[ \t]*([^\s#]+)", re.MULTILINE)
     API_KEY_PLACEHOLDER = "TU_API_KEY"
@@ -71,6 +71,7 @@ def test_scanner_detects_real_values(text, kind):
     "rtsp://192.168.1.50:554/stream2",
     "IOT_API_KEY=change-this-key",
     "IOT_API_KEY=",
+    '"IOT_API_KEY=",\n"another_long_text_value"',
 ])
 def test_scanner_accepts_placeholders(text):
     assert SecretScanner().find(text) == []
