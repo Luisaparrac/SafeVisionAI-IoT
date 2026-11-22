@@ -19,3 +19,5 @@ CLAUDE.md
 grabaciones_entreno/
 grabaciones_prueba/
 frames_entreno/
+.ipynb_checkpoints/
+*.zip
