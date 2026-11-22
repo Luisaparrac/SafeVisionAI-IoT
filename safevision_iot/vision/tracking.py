@@ -31,10 +31,39 @@ class TrackedSubject:
     history: deque = field(default_factory=lambda: deque(maxlen=300))
     last_seen: float = 0.0
     last_motion: float = 0.0
+    age_votes: deque = field(default_factory=lambda: deque(maxlen=15))    # (is_child, confidence)
+    min_age_votes: int = 5
+    age_enabled: bool = False
+    last_age_check: float = float("-inf")
 
     @property
     def is_person(self) -> bool:
         return self.detected_class == "person"
+
+    def add_age_vote(self, is_child: bool, confidence: float) -> None:
+        self.age_votes.append((is_child, confidence))
+
+    @property
+    def is_child(self) -> bool:
+        """Majority of the recent votes, once there are enough of them."""
+        if len(self.age_votes) < self.min_age_votes:
+            return False
+        return 2 * sum(vote for vote, _ in self.age_votes) > len(self.age_votes)
+
+    @property
+    def age_pending(self) -> bool:
+        """The classifier is active but there are not enough votes yet."""
+        return self.is_person and self.age_enabled and len(self.age_votes) < self.min_age_votes
+
+    @property
+    def age_label(self) -> str | None:
+        """For example "niño (87 %)"; None while the age is unknown."""
+        if not self.is_person or len(self.age_votes) < self.min_age_votes:
+            return None
+        child = self.is_child
+        majority = [confidence for vote, confidence in self.age_votes if vote == child]
+        name = "niño" if child else "adulto"
+        return f"{name} ({100 * sum(majority) / len(majority):.0f} %)"
 
     @property
     def last(self) -> Observation:
@@ -68,7 +97,12 @@ class TrackRegistry:
     """
 
     def __init__(self, posture: PostureClassifier, motion_threshold: float = 0.02,
-                 max_gap: float = 3.0, forget_after: float = 10.0):
+                 max_gap: float = 3.0, forget_after: float = 10.0, age_classifier=None,
+                 child_min_votes: int = 5, age_interval: float = 0.5):
+        """age_classifier: optional function (frame, box) -> (is_child, confidence) or None."""
+        self._age_classifier = age_classifier
+        self._child_min_votes = child_min_votes
+        self._age_interval = age_interval      # at most 2 classifications per second
         self._posture = posture
         self._motion_threshold = motion_threshold
         self._max_gap = max_gap
@@ -78,13 +112,14 @@ class TrackRegistry:
         self._next_id = 1_000_000
 
     def update(self, detections: list[Detection], timestamp: float,
-               frame_width: int, frame_height: int) -> list[TrackedSubject]:
+               frame_width: int, frame_height: int, image=None) -> list[TrackedSubject]:
         updated: list[TrackedSubject] = []
         used: set[int] = set()
         for detection in detections:
             subject = self._subject_for(detection, timestamp, used)
             used.add(subject.track_id)
             self._record(subject, detection, timestamp, frame_width, frame_height)
+            self._vote_age(subject, detection, timestamp, image)
             updated.append(subject)
         self._forget(timestamp)
         return updated
@@ -99,8 +134,9 @@ class TrackRegistry:
         nearest = self._nearest(detection, timestamp, used)
         if nearest is None:
             key = tid if tid is not None else self._new_id()
-            nearest = self.subjects[key] = TrackedSubject(key, detection.detected_class,
-                                                          last_motion=timestamp)
+            nearest = self.subjects[key] = TrackedSubject(
+                key, detection.detected_class, last_motion=timestamp,
+                min_age_votes=self._child_min_votes, age_enabled=self._age_classifier is not None)
         if tid is not None:
             self._aliases[tid] = nearest.track_id
         return nearest
@@ -144,6 +180,16 @@ class TrackRegistry:
             subject.last_motion = timestamp
         subject.history.append(observation)
         subject.last_seen = timestamp
+
+    def _vote_age(self, subject: TrackedSubject, detection: Detection, timestamp: float, image) -> None:
+        if self._age_classifier is None or image is None or not subject.is_person:
+            return
+        if timestamp - subject.last_age_check < self._age_interval:
+            return
+        subject.last_age_check = timestamp
+        vote = self._age_classifier(image, detection.box)
+        if vote is not None:
+            subject.add_age_vote(*vote)
 
     @staticmethod
     def _movement(a: Observation, b: Observation) -> float:
