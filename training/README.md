@@ -56,7 +56,8 @@ Antes de entrenar, el script revisa que el dataset tenga una clase de caída y q
 | Recall | De las caídas reales, qué parte detectó |
 | mAP50 | Calidad general de la detección (0 a 1) |
 
-Las gráficas del entrenamiento (`results.png`, matriz de confusión) quedan en `runs/fall_model/`.
+Las gráficas del entrenamiento (`results.png`, matriz de confusión) quedan en la carpeta que el
+script muestra al final, porque la ruta dentro de `runs/` cambia según la versión de ultralytics.
 
 ## Evaluar videos grabados
 
@@ -109,3 +110,44 @@ Hubo 14 clips no detectados y 0 falsas alarmas según la definición anterior. A
 
 Los umbrales se calibraron con estos mismos clips y solo hay un video de actividad normal, así que
 estos resultados son una línea base y no una medida de precisión en situaciones nuevas.
+
+## Resultados del modelo entrenado
+
+### Datos de entrenamiento
+
+| Dato | Valor |
+|---|---|
+| Fotos | Unas 443, propias, tomadas con la Tapo C110 |
+| Etiquetado | Roboflow, clases `fall` y `person` |
+| División | 310 entrenamiento, 89 validación, 44 prueba |
+| Modelo | YOLO11n |
+| Entrenamiento | 100 épocas en Google Colab con GPU T4, unos 10 minutos |
+
+### Métricas de validación
+
+| Métrica | Valor |
+|---|---|
+| Precision | 0.988 |
+| Recall | 1.000 |
+| mAP50 | 0.995 |
+| mAP50-95 | 0.959 |
+
+Estas métricas son **optimistas**: las fotos de validación vienen de los mismos videos que las de
+entrenamiento, así que se parecen mucho entre sí.
+
+### Prueba con videos nunca vistos
+
+Se separaron 6 videos por video completo, de modo que ninguna de sus fotos se usó para entrenar.
+
+| Configuración | Aciertos | Porcentaje | Falsas alarmas | Archivo |
+|---|---|---|---|---|
+| Sin modelo | 3 de 6 | 50 % | 0 | `results/prueba_antes.csv` |
+| Con modelo | 6 de 6 | 100 % | 0 | `results/prueba_despues.csv` |
+
+**Limitación:** son pocos videos de prueba y solo uno es de actividad normal. Falta medir las falsas
+alarmas con más situaciones normales.
+
+### Cómo obtener el modelo
+
+El archivo `.pt` no está en el repositorio. Para obtenerlo, entrena con `train_fall_model.ipynb`,
+descarga `fall_model.pt`, guárdalo en `models/` y pon `FALL_MODEL=models/fall_model.pt` en `.env`.
