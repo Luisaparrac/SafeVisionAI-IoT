@@ -10,6 +10,7 @@ model is copied to models/fall_model.pt; set FALL_MODEL=models/fall_model.pt
 in .env to use it in the IoT module.
 """
 import argparse
+import random
 import shutil
 import sys
 from dataclasses import dataclass
@@ -59,6 +60,26 @@ class DatasetChecker:
                       (root / entry.removeprefix("../")).resolve()]
         return next((folder for folder in candidates if folder.exists()), candidates[0])
 
+    def ensure_validation(self, splitter: "ValidationSplitter | None" = None) -> int:
+        """Creates valid/images from train when the validation folder is missing or empty."""
+        if "train" not in self.spec:
+            return 0
+        if "val" in self.spec and self._has_images(self.split_folder("val")):
+            return 0
+        train = self.split_folder("train")
+        if not self._has_images(train):
+            return 0
+        target = train.parent.parent / "valid" / "images"
+        moved = (splitter or ValidationSplitter()).split(train, target)
+        if moved:
+            self.spec["val"] = str(target)
+        return moved
+
+    @staticmethod
+    def _has_images(folder: Path) -> bool:
+        return folder.exists() and any(p.suffix.lower() in {".jpg", ".jpeg", ".png"}
+                                       for p in folder.rglob("*"))
+
     def check(self) -> list[str]:
         problems = []
         if not fall_class_ids(self.class_names):
@@ -82,6 +103,36 @@ class DatasetChecker:
         target = self.data_yaml.parent / "data.resolved.yaml"
         target.write_text(yaml.safe_dump(spec, allow_unicode=True), encoding="utf-8")
         return target
+
+
+class ValidationSplitter:
+    """Creates a validation split from train when the dataset has none.
+
+    Images and their label files are moved, so no photo ends up in both splits.
+    """
+
+    IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png"}
+
+    def __init__(self, ratio: float = 0.2, seed: int = 42):
+        self._ratio = ratio
+        self._seed = seed
+
+    def split(self, train_images: Path, val_images: Path) -> int:
+        """Moves part of train to val and returns how many images were moved."""
+        images = sorted(p for p in train_images.iterdir() if p.suffix.lower() in self.IMAGE_SUFFIXES)
+        if len(images) < 2:
+            return 0
+        count = max(1, int(len(images) * self._ratio))
+        chosen = random.Random(self._seed).sample(images, count)
+        val_labels = val_images.parent / "labels"
+        val_images.mkdir(parents=True, exist_ok=True)
+        val_labels.mkdir(parents=True, exist_ok=True)
+        for image in chosen:
+            label = train_images.parent / "labels" / f"{image.stem}.txt"
+            shutil.move(str(image), str(val_images / image.name))
+            if label.exists():
+                shutil.move(str(label), str(val_labels / label.name))
+        return count
 
 
 class FallModelTrainer:
@@ -124,6 +175,9 @@ def main() -> None:
     args = parser.parse_args()
 
     checker = DatasetChecker(args.data)
+    moved = checker.ensure_validation()
+    if moved:
+        print(f"No había validación: se movieron {moved} imágenes de train a valid")
     problems = checker.check()
     if problems:
         sys.exit("Dataset problems:\n- " + "\n- ".join(problems))
