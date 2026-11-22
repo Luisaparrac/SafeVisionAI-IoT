@@ -5,6 +5,7 @@ import urllib.request
 import numpy as np
 import pytest
 
+from safevision_iot.settings import Settings
 from safevision_iot.video_stream import VideoServer, VideoStream
 
 
@@ -73,3 +74,18 @@ def test_evidence_rejects_unsafe_or_missing_names(evidence_server, name):
     with pytest.raises(urllib.error.HTTPError) as error:
         urllib.request.urlopen(f"{evidence_server}/{name}", timeout=3)
     assert error.value.code == 404
+
+
+def test_server_listens_only_on_this_pc_by_default():
+    server = VideoServer(VideoStream(), port=0)
+    server.start()
+    try:
+        assert server._server.server_address[0] == "127.0.0.1"
+    finally:
+        server.stop()
+
+
+def test_video_host_setting_defaults_to_this_pc(monkeypatch):
+    monkeypatch.setattr("safevision_iot.settings.load_dotenv", lambda: None)
+    monkeypatch.delenv("VIDEO_HOST", raising=False)
+    assert Settings.from_env().video_host == "127.0.0.1"
