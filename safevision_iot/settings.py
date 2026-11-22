@@ -29,6 +29,9 @@ class Settings:
     analysis_fps: float
     person_subject_id: int | None   
     pet_subject_id: int | None
+    child_model: str | None
+    child_min_votes: int
+    child_subject_id: int | None
 
     # Rules
     fall_window_seconds: float
@@ -42,6 +45,8 @@ class Settings:
     person_immobility_seconds: float
     pet_immobility_seconds: float
     zone_dwell_seconds: float
+    pet_furniture_seconds: float
+    child_furniture_seconds: float
     event_cooldown_seconds: float
     zones_refresh_seconds: float
     evidence_dir: str
@@ -69,6 +74,9 @@ class Settings:
             analysis_fps=float(env("ANALYSIS_FPS", "5")),
             person_subject_id=_optional_int("PERSON_SUBJECT_ID"),
             pet_subject_id=_optional_int("PET_SUBJECT_ID"),
+            child_model=env("CHILD_MODEL", "").strip() or None,
+            child_min_votes=int(env("CHILD_MIN_VOTES", "5")),
+            child_subject_id=_optional_int("CHILD_SUBJECT_ID"),
             fall_window_seconds=float(env("FALL_WINDOW_SECONDS", "1.5")),
             fall_drop_ratio=float(env("FALL_DROP_RATIO", "0.3")),
             fall_confirm_seconds=float(env("FALL_CONFIRM_SECONDS", "2")),
@@ -80,6 +88,8 @@ class Settings:
             person_immobility_seconds=float(env("PERSON_IMMOBILITY_SECONDS", "60")),
             pet_immobility_seconds=float(env("PET_IMMOBILITY_SECONDS", "1800")),
             zone_dwell_seconds=float(env("ZONE_DWELL_SECONDS", "2")),
+            pet_furniture_seconds=float(env("PET_FURNITURE_SECONDS", "3")),
+            child_furniture_seconds=float(env("CHILD_FURNITURE_SECONDS", "2")),
             event_cooldown_seconds=float(env("EVENT_COOLDOWN_SECONDS", "60")),
             zones_refresh_seconds=float(env("ZONES_REFRESH_SECONDS", "300")),
             evidence_dir=env("EVIDENCE_DIR", "evidence"),
