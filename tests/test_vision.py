@@ -6,12 +6,16 @@ import numpy as np
 from safevision_iot.event_reporter import EventReporter
 from safevision_iot.settings import Settings
 from safevision_iot.vision.analyzer import Cooldown, SceneAnalyzer
-from safevision_iot.vision.detections import Box, Detection, FrameDetections, PersonDetection
+from safevision_iot.vision.detections import (Box, Detection, FrameDetections, FurnitureDetection,
+                                              PersonDetection)
+from safevision_iot.vision.detectors import child_class_ids, crop_with_margin
 from safevision_iot.vision.posture import Posture, PostureClassifier
-from safevision_iot.vision.rules import (ABNORMAL_MOVEMENT, FALL, IMMOBILITY, RESTRICTED_ZONE,
-                                         AbnormalMovementRule, FallRule, Finding, ImmobilityRule,
-                                         RestrictedZoneRule, TrainedFallRule)
-from safevision_iot.vision.tracking import TrackRegistry
+from safevision_iot.vision.rules import (ABNORMAL_MOVEMENT, CHILD_ON_FURNITURE, CHILD_RISK_ZONE, FALL,
+                                         IMMOBILITY, PET_ON_FURNITURE, RESTRICTED_ZONE,
+                                         AbnormalMovementRule, ChildOnFurnitureRule, FallRule, Finding,
+                                         ImmobilityRule, PetOnFurnitureRule, RestrictedZoneRule,
+                                         TrainedFallRule)
+from safevision_iot.vision.tracking import TrackedSubject, TrackRegistry
 from safevision_iot.vision.zone import Zone
 from safevision_iot.vision.zone_provider import ZoneProvider
 
@@ -221,6 +225,155 @@ def test_lying_person_moving_arms_does_not_trigger():
 def test_still_person_does_not_trigger_abnormal_movement():
     frames = [with_wrists(standing(), 300)] * 20
     assert ABNORMAL_MOVEMENT not in types(run(frames, abnormal_scene()))
+
+
+# ---------- children and pets ----------
+IMAGE = np.zeros((H, W, 3), dtype=np.uint8)
+EVERYWHERE = Zone(9, "Cocina", ((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)))
+
+
+def furniture(label, x1, y1, x2, y2) -> FurnitureDetection:
+    return FurnitureDetection(None, label, Box(x1, y1, x2, y2), 0.8)
+
+
+def sitting() -> PersonDetection:
+    return replace(standing(), box=Box(200, 100, 400, 340))
+
+
+def age_scene(rule, is_child=True):
+    registry = TrackRegistry(PostureClassifier(), age_classifier=lambda image, box: (is_child, 0.87))
+    return SceneAnalyzer(registry, [rule], Cooldown(60))
+
+
+def run_furniture(frames, items, scene):
+    found: list[Finding] = []
+    for i, detection in enumerate(frames):
+        found += scene.process(FrameDetections(i / FPS, W, H, [detection], items, IMAGE))
+    return found
+
+
+def pet_scene():
+    return SceneAnalyzer(TrackRegistry(PostureClassifier()), [PetOnFurnitureRule(3)], Cooldown(60))
+
+
+def test_age_needs_minimum_votes():
+    subject = TrackedSubject(1, "person", min_age_votes=5)
+    for _ in range(4):
+        subject.add_age_vote(True, 0.9)
+    assert not subject.is_child and subject.age_label is None
+    subject.add_age_vote(True, 0.8)
+    assert subject.is_child and subject.age_label == "niño (88 %)"
+
+
+def test_age_uses_majority_of_the_last_15_votes():
+    subject = TrackedSubject(1, "person")
+    for _ in range(15):
+        subject.add_age_vote(True, 0.9)
+    for _ in range(8):
+        subject.add_age_vote(False, 0.7)
+    assert len(subject.age_votes) == 15
+    assert not subject.is_child and subject.age_label == "adulto (70 %)"
+
+
+def test_age_is_classified_at_most_twice_per_second():
+    calls = []
+    registry = TrackRegistry(PostureClassifier(),
+                             age_classifier=lambda image, box: calls.append(1) or (True, 0.9))
+    for i in range(FPS * 4):
+        registry.update([standing()], i / FPS, W, H, IMAGE)
+    assert len(calls) <= 8
+
+
+def test_child_class_names():
+    assert child_class_ids({0: "adults", 1: "children"}) == [1]
+    assert child_class_ids({0: "adulto", 1: "nino"}) == [1]
+    assert child_class_ids({0: "adult", 1: "not_child"}) == []
+
+
+def test_crop_adds_margin_and_stays_inside_the_image():
+    assert crop_with_margin(IMAGE, Box(100, 100, 200, 300)).shape[:2] == (240, 120)
+    assert crop_with_margin(IMAGE, Box(0, 0, 1000, 600)).shape[:2] == (600, 1000)
+
+
+def test_pet_on_couch_triggers():
+    findings = run_furniture([dog()] * 20, [furniture("couch", 100, 420, 700, 600)], pet_scene())
+    assert types(findings) == [PET_ON_FURNITURE]
+    assert findings[0].detected_class == "dog" and "perro sobre sofá" in findings[0].description
+
+
+def test_pet_on_the_floor_next_to_couch_does_not_trigger():
+    assert run_furniture([dog()] * 30, [furniture("couch", 300, 420, 900, 600)], pet_scene()) == []
+
+
+def test_pet_on_the_floor_in_front_of_couch_does_not_trigger():
+    assert run_furniture([dog()] * 30, [furniture("couch", 100, 300, 700, 520)], pet_scene()) == []
+
+
+def test_pet_on_a_chair_does_not_trigger():
+    assert run_furniture([dog()] * 30, [furniture("chair", 100, 420, 700, 600)], pet_scene()) == []
+
+
+def test_child_on_bed_triggers_as_person():
+    findings = run_furniture([standing()] * 40, [furniture("bed", 100, 300, 700, 560)],
+                             age_scene(ChildOnFurnitureRule(2)))
+    assert types(findings) == [CHILD_ON_FURNITURE]
+    assert findings[0].detected_class == "person" and "niño (87 %)" in findings[0].description
+    assert findings[0].is_child
+
+
+def test_adult_on_bed_does_not_trigger():
+    assert run_furniture([standing()] * 40, [furniture("bed", 100, 300, 700, 560)],
+                         age_scene(ChildOnFurnitureRule(2), is_child=False)) == []
+
+
+def test_child_sitting_on_chair_does_not_trigger():
+    assert run_furniture([sitting()] * 40, [furniture("chair", 150, 200, 450, 500)],
+                         age_scene(ChildOnFurnitureRule(2))) == []
+
+
+def test_child_standing_on_chair_triggers():
+    findings = run_furniture([standing()] * 40, [furniture("chair", 150, 200, 450, 500)],
+                             age_scene(ChildOnFurnitureRule(2)))
+    assert types(findings) == [CHILD_ON_FURNITURE]
+
+
+def test_child_on_the_floor_does_not_trigger():
+    assert run_furniture([standing()] * 40, [furniture("bed", 500, 300, 900, 560)],
+                         age_scene(ChildOnFurnitureRule(2))) == []
+
+
+def test_child_in_zone_waits_for_votes_and_reports_child_event():
+    findings = run_furniture([standing()] * 30, [], age_scene(RestrictedZoneRule(lambda: [EVERYWHERE], 2)))
+    assert types(findings) == [CHILD_RISK_ZONE]
+    assert findings[0].detected_class == "person" and "niño (87 %)" in findings[0].description
+
+
+def test_adult_in_zone_keeps_the_normal_event():
+    findings = run_furniture([standing()] * 30, [],
+                             age_scene(RestrictedZoneRule(lambda: [EVERYWHERE], 2), is_child=False))
+    assert types(findings) == [RESTRICTED_ZONE]
+    assert "adulto (87 %)" in findings[0].description
+
+
+def test_zone_event_is_not_lost_if_age_never_arrives():
+    registry = TrackRegistry(PostureClassifier(), age_classifier=lambda image, box: None)
+    scene = SceneAnalyzer(registry, [RestrictedZoneRule(lambda: [EVERYWHERE], 2)], Cooldown(60))
+    assert types(run_furniture([standing()] * 40, [], scene)) == [RESTRICTED_ZONE]
+
+
+def test_reporter_uses_child_subject_id():
+    reporter = EventReporter(None, 1, "unused", person_subject_id=7, child_subject_id=11)
+    child = reporter.to_event(Finding(CHILD_ON_FURNITURE, 1, "person", 0.9, "x", is_child=True))
+    adult = reporter.to_event(Finding(FALL, 2, "person", 0.9, "y"))
+    assert (child.subject_id, child.detected_class) == (11, "person")
+    assert adult.subject_id == 7
+
+
+def test_reporter_builds_evidence_url(tmp_path):
+    from pathlib import Path
+    reporter = EventReporter(None, 1, str(tmp_path), evidence_base_url="http://localhost:8080/evidence/")
+    event = reporter.to_event(Finding(FALL, 1, "person", 0.9, "x"), Path("a_Caída.jpg"))
+    assert event.evidence_url == "http://localhost:8080/evidence/a_Ca%C3%ADda.jpg"
 
 
 # ---------- trained model ----------
