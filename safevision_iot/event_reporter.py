@@ -5,6 +5,7 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import quote
 
 import cv2
 
@@ -23,7 +24,8 @@ class EventReporter:
 
     def __init__(self, client: BackendClient | None, camera_id: int, evidence_dir: str,
                  person_subject_id: int | None = None, pet_subject_id: int | None = None,
-                 max_pending: int = 100):
+                 max_pending: int = 100, evidence_base_url: str = ""):
+        self._evidence_base_url = evidence_base_url.rstrip("/")
         self._client = client
         self._camera_id = camera_id
         self._evidence_dir = Path(evidence_dir)
@@ -57,8 +59,14 @@ class EventReporter:
             zone_id=finding.zone_id,
             detected_class=finding.detected_class,
             confidence=round(min(max(finding.confidence, 0.0), 1.0), 3),
+            evidence_url=self._evidence_url(evidence),
             description=description[:2000],
         )
+
+    def _evidence_url(self, evidence: Path | None) -> str | None:
+        if evidence is None or not self._evidence_base_url:
+            return None
+        return f"{self._evidence_base_url}/{quote(evidence.name)}"
 
     def wait_until_sent(self, timeout: float = 30) -> None:
         end = time.time() + timeout
