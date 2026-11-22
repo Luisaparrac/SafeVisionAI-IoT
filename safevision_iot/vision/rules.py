@@ -8,15 +8,18 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
 
+import numpy as np
+
 from safevision_iot.vision.detections import Box
 from safevision_iot.vision.posture import Posture
-from safevision_iot.vision.tracking import TrackedSubject
+from safevision_iot.vision.tracking import Observation, TrackedSubject
 from safevision_iot.vision.zone import Zone
 
 # Names exactly as stored in the event_types table
 FALL = "Caída"
 IMMOBILITY = "Inmovilidad prolongada"
 RESTRICTED_ZONE = "Permanencia en zona restringida"
+ABNORMAL_MOVEMENT = "Movimiento anormal"
 
 
 @dataclass
@@ -139,6 +142,80 @@ class RestrictedZoneRule(Rule):
         for key in [k for k in self._entered if k[0] == track_id]:
             del self._entered[key]
         self._reported = {k for k in self._reported if k[0] != track_id}
+
+
+class AbnormalMovementRule(Rule):
+    """Repeated sudden arm movements, such as throwing objects or hitting.
+
+    Wrist speed is measured in body heights per second, so it does not depend
+    on the distance to the camera. To avoid confusing a fall with this event,
+    a movement does not count if the person is lying, if the hips are dropping
+    fast, or if the person ends up lying within `settle_seconds`. That is why
+    each movement is only counted once `settle_seconds` have passed.
+    """
+
+    WRISTS = (9, 10)        # COCO indices
+    MIN_KEYPOINT_CONF = 0.3
+
+    def __init__(self, speed_threshold: float = 0.8, min_peaks: int = 5, window_seconds: float = 3.0,
+                 max_hip_speed: float = 0.5, settle_seconds: float = 1.0):
+        self._speed_threshold = speed_threshold
+        self._min_peaks = min_peaks
+        self._window = window_seconds
+        self._max_hip_speed = max_hip_speed
+        self._settle = settle_seconds
+
+    def evaluate(self, subject: TrackedSubject, now: float) -> Finding | None:
+        if not subject.is_person or subject.last.keypoints is None:
+            return None
+        settled_until = now - self._settle
+        observations = list(subject.recent(now, self._window + self._settle))    # newest first
+        peaks = 0
+        next_lying = None
+        for newer, older in zip(observations, observations[1:]):
+            if newer.posture == Posture.LYING:
+                next_lying = newer.timestamp
+            if newer.timestamp > settled_until or older.timestamp < settled_until - self._window:
+                continue
+            ends_lying = next_lying is not None and next_lying - newer.timestamp <= self._settle
+            if not ends_lying and self._is_peak(older, newer):
+                peaks += 1
+        if peaks < self._min_peaks:
+            return None
+        return Finding(ABNORMAL_MOVEMENT, subject.track_id, "person",
+                       min(1.0, peaks / (2 * self._min_peaks)),
+                       f"Movimiento anormal: {peaks} movimientos bruscos de brazos en {self._window:g} s "
+                       "(posible lanzamiento de objetos o agresión).")
+
+    def _is_peak(self, older: Observation, newer: Observation) -> bool:
+        if Posture.LYING in (older.posture, newer.posture):
+            return False
+        if self._hip_speed(older, newer) > self._max_hip_speed:
+            return False
+        return self._wrist_speed(older, newer) > self._speed_threshold
+
+    @staticmethod
+    def _hip_speed(older: Observation, newer: Observation) -> float:
+        """Vertical hip speed between two frames, in body heights per second."""
+        dt = newer.timestamp - older.timestamp
+        if dt <= 0 or newer.box_height <= 0 or older.hip_y is None or newer.hip_y is None:
+            return 0.0
+        return abs(newer.hip_y - older.hip_y) / newer.box_height / dt
+
+    def _wrist_speed(self, older: Observation, newer: Observation) -> float:
+        """Fastest visible wrist between two frames, in body heights per second."""
+        dt = newer.timestamp - older.timestamp
+        if dt <= 0 or newer.box_height <= 0:
+            return 0.0
+        if older.keypoints is None or newer.keypoints is None:
+            return 0.0
+        if older.keypoint_conf is None or newer.keypoint_conf is None:
+            return 0.0
+        speeds = [float(np.linalg.norm(newer.keypoints[w] - older.keypoints[w])) / newer.box_height / dt
+                  for w in self.WRISTS
+                  if older.keypoint_conf[w] > self.MIN_KEYPOINT_CONF
+                  and newer.keypoint_conf[w] > self.MIN_KEYPOINT_CONF]
+        return max(speeds, default=0.0)
 
 
 class TrainedFallRule(Rule):
