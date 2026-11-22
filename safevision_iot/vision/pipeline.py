@@ -8,7 +8,7 @@ import cv2
 
 from safevision_iot.event_reporter import EventReporter
 from safevision_iot.vision.analyzer import SceneAnalyzer
-from safevision_iot.vision.detections import FrameDetections
+from safevision_iot.vision.detections import FrameDetections, FurnitureDetection
 from safevision_iot.vision.detectors import Detector
 from safevision_iot.vision.rules import Finding
 
@@ -60,10 +60,13 @@ class DetectionPipeline:
 
     def process(self, frame, timestamp: float) -> list[Finding]:
         height, width = frame.shape[:2]
-        items = [item for detector in self._detectors for item in detector.detect(frame)]
+        found = [item for detector in self._detectors for item in detector.detect(frame)]
+        items = [item for item in found if not isinstance(item, FurnitureDetection)]
+        furniture = [item for item in found if isinstance(item, FurnitureDetection)]
         fall_boxes = ([(d.box, d.confidence) for d in self._fall_detector.detect(frame)]
                       if self._fall_detector else None)
-        findings = self._analyzer.process(FrameDetections(timestamp, width, height, items), fall_boxes)
+        findings = self._analyzer.process(FrameDetections(timestamp, width, height, items, furniture, frame),
+                                          fall_boxes)
         for finding in findings:
             self._reporter.report(finding, frame)
         if self._annotator:
@@ -138,6 +141,8 @@ class FrameAnnotator:
             label = f"#{subject.track_id} {subject.detected_class}"
             if obs.posture:
                 label += f" {obs.posture.label}"
+            if subject.age_label:
+                label += f" {subject.age_label}"
             cv2.putText(image, plain_text(label), (int(b.x1), max(int(b.y1) - 8, 14)),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2)
             if obs.keypoints is not None:
