@@ -15,3 +15,7 @@ frames/
 descargar_dataset.py
 .claude/
 CLAUDE.md
+
+grabaciones_entreno/
+grabaciones_prueba/
+frames_entreno/
