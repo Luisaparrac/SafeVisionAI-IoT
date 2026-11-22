@@ -8,8 +8,9 @@ from safevision_iot.settings import Settings
 from safevision_iot.vision.analyzer import Cooldown, SceneAnalyzer
 from safevision_iot.vision.detections import Box, Detection, FrameDetections, PersonDetection
 from safevision_iot.vision.posture import Posture, PostureClassifier
-from safevision_iot.vision.rules import (FALL, IMMOBILITY, RESTRICTED_ZONE, FallRule, Finding,
-                                         ImmobilityRule, RestrictedZoneRule, TrainedFallRule)
+from safevision_iot.vision.rules import (ABNORMAL_MOVEMENT, FALL, IMMOBILITY, RESTRICTED_ZONE,
+                                         AbnormalMovementRule, FallRule, Finding, ImmobilityRule,
+                                         RestrictedZoneRule, TrainedFallRule)
 from safevision_iot.vision.tracking import TrackRegistry
 from safevision_iot.vision.zone import Zone
 from safevision_iot.vision.zone_provider import ZoneProvider
@@ -168,6 +169,58 @@ def test_zone_provider_keeps_active_zones_of_its_camera():
                     {"zone_id": 2, "name": "B", "coordinates": [[0, 0], [1, 0], [1, 1]], "camera_id": 2, "is_active": True},
                     {"zone_id": 3, "name": "C", "coordinates": [[0, 0], [1, 0], [1, 1]], "camera_id": 1, "is_active": False}]
     assert [z.zone_id for z in ZoneProvider(Client(), camera_id=1)()] == [1]
+
+
+# ---------- abnormal movement ----------
+def with_wrists(person: PersonDetection, wrist_y: float) -> PersonDetection:
+    keypoints, conf = person.keypoints.copy(), person.keypoint_conf.copy()
+    keypoints[9], keypoints[10] = [person.box.x1, wrist_y], [person.box.x2, wrist_y]
+    conf[9], conf[10] = 0.9, 0.9
+    return replace(person, keypoints=keypoints, keypoint_conf=conf)
+
+
+def abnormal_scene():
+    return analyzer(extra_rules=[AbnormalMovementRule(speed_threshold=2.5, min_peaks=3, window_seconds=3)])
+
+
+def test_repeated_fast_arms_trigger_abnormal_movement():
+    frames = [with_wrists(standing(), 150 if i % 2 else 400) for i in range(10)]
+    frames += [with_wrists(standing(), 400)] * 15       # the movements are counted after settling
+    findings = [f for f in run(frames, abnormal_scene()) if f.event_type == ABNORMAL_MOVEMENT]
+    assert len(findings) == 1
+    assert findings[0].confidence == 0.5
+    assert "movimientos bruscos" in findings[0].description
+
+
+def test_single_arm_movement_does_not_trigger():
+    frames = [with_wrists(standing(), 400)] * 5 + [with_wrists(standing(), 150)] * 20
+    assert ABNORMAL_MOVEMENT not in types(run(frames, abnormal_scene()))
+
+
+def test_fast_arms_before_ending_up_lying_do_not_trigger():
+    frames = [with_wrists(standing(), 150 if i % 2 else 400) for i in range(5)]
+    frames += [with_wrists(lying(), 400)] * 20
+    assert ABNORMAL_MOVEMENT not in types(run(frames, abnormal_scene()))
+
+
+def test_fast_arms_while_hips_drop_do_not_trigger():
+    frames = []
+    for i in range(10):
+        person = with_wrists(standing(), 150 if i % 2 else 400)
+        person.keypoints[11:13, 1] = 360 if i % 2 else 260
+        frames.append(person)
+    frames += [with_wrists(standing(), 400)] * 15
+    assert ABNORMAL_MOVEMENT not in types(run(frames, abnormal_scene()))
+
+
+def test_lying_person_moving_arms_does_not_trigger():
+    frames = [with_wrists(lying(), 300 if i % 2 else 500) for i in range(15)]
+    assert ABNORMAL_MOVEMENT not in types(run(frames, abnormal_scene()))
+
+
+def test_still_person_does_not_trigger_abnormal_movement():
+    frames = [with_wrists(standing(), 300)] * 20
+    assert ABNORMAL_MOVEMENT not in types(run(frames, abnormal_scene()))
 
 
 # ---------- trained model ----------
