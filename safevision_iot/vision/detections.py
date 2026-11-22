@@ -1,5 +1,5 @@
 """What the detectors see in one frame."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -53,9 +53,16 @@ class PersonDetection(Detection):
 
 
 @dataclass
+class FurnitureDetection(Detection):
+    """A piece of furniture; detected_class is chair, couch, bed or dining table."""
+
+
+@dataclass
 class FrameDetections:
     """Everything detected in one frame, plus the frame size."""
     timestamp: float
     frame_width: int
     frame_height: int
     items: list[Detection]
+    furniture: list[FurnitureDetection] = field(default_factory=list)
+    image: np.ndarray | None = None       # needed to classify each person by age
