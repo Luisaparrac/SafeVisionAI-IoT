@@ -111,9 +111,11 @@ Hubo 14 clips no detectados y 0 falsas alarmas según la definición anterior. A
 Los umbrales se calibraron con estos mismos clips y solo hay un video de actividad normal, así que
 estos resultados son una línea base y no una medida de precisión en situaciones nuevas.
 
-## Resultados del modelo entrenado
+## Resultados de los modelos entrenados
 
-### Datos de entrenamiento
+### Caídas
+
+#### Datos de entrenamiento
 
 | Dato | Valor |
 |---|---|
@@ -123,7 +125,7 @@ estos resultados son una línea base y no una medida de precisión en situacione
 | Modelo | YOLO11n |
 | Entrenamiento | 100 épocas en Google Colab con GPU T4, unos 10 minutos |
 
-### Métricas de validación
+#### Métricas de validación
 
 | Métrica | Valor |
 |---|---|
@@ -135,7 +137,7 @@ estos resultados son una línea base y no una medida de precisión en situacione
 Estas métricas son **optimistas**: las fotos de validación vienen de los mismos videos que las de
 entrenamiento, así que se parecen mucho entre sí.
 
-### Prueba con videos nunca vistos
+#### Prueba con videos nunca vistos
 
 Se separaron 6 videos por video completo, de modo que ninguna de sus fotos se usó para entrenar.
 
@@ -147,7 +149,31 @@ Se separaron 6 videos por video completo, de modo que ninguna de sus fotos se us
 **Limitación:** son pocos videos de prueba y solo uno es de actividad normal. Falta medir las falsas
 alarmas con más situaciones normales.
 
-### Cómo obtener el modelo
+### Niño/adulto
 
-El archivo `.pt` no está en el repositorio. Para obtenerlo, entrena con `train_fall_model.ipynb`,
-descarga `fall_model.pt`, guárdalo en `models/` y pon `FALL_MODEL=models/fall_model.pt` en `.env`.
+| Dato | Valor |
+|---|---|
+| Dataset | [CHILD ADULT DATASET](https://universe.roboflow.com/vallabha-group-of-companies/child-adult-dataset), de Vallabha Group of Companies, en Roboflow Universe |
+| Licencia | MIT |
+| División | 559 entrenamiento, 139 validación, 99 prueba |
+| Modelo | YOLO11n-cls |
+| Entrenamiento | 30 épocas |
+| top1_acc | 0.856 |
+
+Con esa exactitud, un solo cuadro puede equivocarse. Por eso el sistema vota con varios cuadros por
+persona y solo decide cuando tiene suficientes votos.
+
+```bash
+python training/train_child_model.py --data <carpeta> --epochs 30 --device 0
+```
+
+### Cómo obtener los modelos
+
+Los archivos `.pt` no están en el repositorio. Para obtenerlos:
+
+| Modelo | Cuaderno | Archivo | Variable en `.env` |
+|---|---|---|---|
+| Caídas | `train_fall_model.ipynb` | `models/fall_model.pt` | `FALL_MODEL=models/fall_model.pt` |
+| Niño/adulto | `train_child_model.ipynb` | `models/child_model.pt` | `CHILD_MODEL=models/child_model.pt` |
+
+No guardes los cuadernos en GitHub con tu clave de Roboflow.
