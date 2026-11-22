@@ -10,3 +10,8 @@ evidence/
 runs/
 datasets/
 data.resolved.yaml
+grabaciones/
+frames/
+descargar_dataset.py
+.claude/
+CLAUDE.md
