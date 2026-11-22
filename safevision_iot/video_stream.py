@@ -79,7 +79,7 @@ class VideoServer:
 
     BOUNDARY = "frame"
 
-    def __init__(self, stream: VideoStream, port: int = 8080, host: str = "0.0.0.0",
+    def __init__(self, stream: VideoStream, port: int = 8080, host: str = "127.0.0.1",
                  evidence_dir: str | Path | None = None):
         self._stream = stream
         self._evidence = EvidenceStore(evidence_dir) if evidence_dir else None
