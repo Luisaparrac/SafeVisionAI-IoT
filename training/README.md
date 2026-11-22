@@ -57,3 +57,55 @@ Antes de entrenar, el script revisa que el dataset tenga una clase de caída y q
 | mAP50 | Calidad general de la detección (0 a 1) |
 
 Las gráficas del entrenamiento (`results.png`, matriz de confusión) quedan en `runs/fall_model/`.
+
+## Evaluar videos grabados
+
+Analiza una carpeta de videos con el pipeline real, sin enviar nada al backend y sin zonas:
+
+```bash
+python training/evaluate_videos.py grabaciones --output training/results/resultados_antes.csv
+```
+
+El CSV (UTF-8 con BOM, para Excel) tiene las columnas `clip`, `evento_esperado`,
+`eventos_detectados` y `resultado`. El evento esperado se deduce del nombre del video:
+
+| Prefijo | Qué muestra | Evento esperado |
+|---|---|---|
+| `caida_al_frente_`, `caida_al_lado_`, `caida_atras_` | Caída real | Caída |
+| `caida_silla_`, `desmayo_silla_` | Caída desde una silla | Caída |
+| `actividad_anormal_` | La persona lanza objetos | Movimiento anormal |
+| `actividad_normal_` | La persona se agacha o se arrodilla | Ninguno |
+
+| Resultado | Significado |
+|---|---|
+| Acierto | Salió el evento esperado, o no se esperaba ninguno y no salió Caída ni Movimiento anormal |
+| No detectado | Se esperaba un evento y no salió, aunque haya salido otro |
+| Falsa alarma | En un clip sin evento esperado salió Caída o Movimiento anormal |
+
+La inmovilidad prolongada solo se anota: no cuenta como error.
+
+## Extraer fotos para el dataset
+
+```bash
+python training/extract_frames.py grabaciones frames --fps 1
+```
+
+Cada foto se llama `<nombre_video>_<numero>.jpg`. Usa OpenCV, así que no necesita ffmpeg.
+
+## Resultados de la línea base
+
+Evaluación de 28 clips sin modelo entrenado (`FALL_MODEL` vacío), en
+`results/resultados_antes.csv`:
+
+| Grupo | Clips | Aciertos |
+|---|---|---|
+| Caídas y desmayo | 21 | 8 |
+| Actividad anormal | 6 | 5 |
+| Actividad normal | 1 | 1 |
+| **Total** | **28** | **14 (50,0 %)** |
+
+Hubo 14 clips no detectados y 0 falsas alarmas según la definición anterior. Aun así, en
+`caida_atras_4` salió Movimiento anormal en lugar de Caída; ese clip cuenta como no detectado.
+
+Los umbrales se calibraron con estos mismos clips y solo hay un video de actividad normal, así que
+estos resultados son una línea base y no una medida de precisión en situaciones nuevas.
