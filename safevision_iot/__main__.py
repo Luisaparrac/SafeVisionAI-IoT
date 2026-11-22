@@ -113,7 +113,7 @@ class IoTApp:
 
         stream = VideoStream()
         try:
-            server = VideoServer(stream, self._settings.video_port,
+            server = VideoServer(stream, self._settings.video_port, self._settings.video_host,
                                  evidence_dir=self._settings.evidence_dir)
         except OSError:
             sys.exit(f"El puerto {self._settings.video_port} está ocupado. Cambia VIDEO_PORT en .env")
