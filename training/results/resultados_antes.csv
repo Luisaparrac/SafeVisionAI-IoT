@@ -1,0 +1,29 @@
+﻿clip,evento_esperado,eventos_detectados,resultado
+actividad_anormal_1.mp4,Movimiento anormal,Movimiento anormal,Acierto
+actividad_anormal_2.mp4,Movimiento anormal,Movimiento anormal,Acierto
+actividad_anormal_3.mp4,Movimiento anormal,Movimiento anormal,Acierto
+actividad_anormal_4.mp4,Movimiento anormal,Ninguno,No detectado
+actividad_anormal_5.mp4,Movimiento anormal,Movimiento anormal,Acierto
+actividad_anormal_6.mp4,Movimiento anormal,Movimiento anormal,Acierto
+actividad_normal_1.mp4,Ninguno,Ninguno,Acierto
+caida_al_frente_1.mp4,Caída,Ninguno,No detectado
+caida_al_frente_2.mp4,Caída,Caída,Acierto
+caida_al_frente_3.mp4,Caída,Caída,Acierto
+caida_al_frente_4.mp4,Caída,Caída,Acierto
+caida_al_frente_5.mp4,Caída,Caída,Acierto
+caida_al_frente_6.mp4,Caída,Caída,Acierto
+caida_al_lado_1.mp4,Caída,Ninguno,No detectado
+caida_al_lado_2.mp4,Caída,Ninguno,No detectado
+caida_al_lado_3.mp4,Caída,Caída,Acierto
+caida_al_lado_4.mp4,Caída,Ninguno,No detectado
+caida_al_lado_5.mp4,Caída,Ninguno,No detectado
+caida_al_lado_6.mp4,Caída,Caída,Acierto
+caida_atras_1.mp4,Caída,Ninguno,No detectado
+caida_atras_2.mp4,Caída,Ninguno,No detectado
+caida_atras_3.mp4,Caída,Ninguno,No detectado
+caida_atras_4.mp4,Caída,Movimiento anormal,No detectado
+caida_atras_5.mp4,Caída,Ninguno,No detectado
+caida_atras_6.mp4,Caída,Ninguno,No detectado
+caida_silla_1.mp4,Caída,Ninguno,No detectado
+caida_silla_2.mp4,Caída,Ninguno,No detectado
+desmayo_silla_1.mp4,Caída,Caída,Acierto
