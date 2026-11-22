@@ -36,7 +36,9 @@ class SceneAnalyzer:
         for rule in self._rules:
             if isinstance(rule, TrainedFallRule):
                 rule.observe(fall_boxes or [])
-        subjects = self._registry.update(frame.items, frame.timestamp, frame.frame_width, frame.frame_height)
+            rule.observe_frame(frame)
+        subjects = self._registry.update(frame.items, frame.timestamp, frame.frame_width, frame.frame_height,
+                                         frame.image)
         for gone in before - set(self._registry.subjects):
             for rule in self._rules:
                 rule.forget(gone)
@@ -46,5 +48,6 @@ class SceneAnalyzer:
             for rule in self._rules:
                 finding = rule.evaluate(subject, frame.timestamp)
                 if finding and self._cooldown.allow(finding.track_id, finding.event_type, frame.timestamp):
+                    finding.is_child = subject.is_child
                     findings.append(finding)
         return findings
