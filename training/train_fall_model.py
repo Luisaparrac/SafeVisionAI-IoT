@@ -45,14 +45,19 @@ class DatasetChecker:
         return dict(enumerate(names)) if isinstance(names, list) else {int(k): v for k, v in names.items()}
 
     def split_folder(self, split: str) -> Path:
-        """Folder of a split, resolved like Roboflow exports expect (relative to data.yaml)."""
+        """First existing folder of a split.
+
+        Roboflow exports use entries like "../train/images" even though the
+        folders are next to data.yaml, so the prefix is also tried without "../".
+        """
+        entry = str(self.spec[split])
+        root = self.data_yaml.parent.resolve()
         base = Path(self.spec.get("path") or ".")
         if not base.is_absolute():
-            base = (self.data_yaml.parent / base).resolve()
-        folder = base / self.spec[split]
-        if not folder.exists():
-            folder = (self.data_yaml.parent / self.spec[split]).resolve()
-        return folder
+            base = root / base
+        candidates = [(base / entry).resolve(), (root / entry).resolve(),
+                      (root / entry.removeprefix("../")).resolve()]
+        return next((folder for folder in candidates if folder.exists()), candidates[0])
 
     def check(self) -> list[str]:
         problems = []
@@ -82,6 +87,7 @@ class DatasetChecker:
 class FallModelTrainer:
     def __init__(self, config: TrainingConfig):
         self.config = config
+        self.save_dir: Path | None = None    # the folder depends on the ultralytics version
 
     def train(self) -> Path:
         from ultralytics import YOLO
@@ -91,7 +97,8 @@ class FallModelTrainer:
                               imgsz=self.config.image_size, batch=self.config.batch,
                               device=self.config.device, project="runs", name="fall_model",
                               exist_ok=True, plots=True)
-        best = Path(results.save_dir) / "weights" / "best.pt"
+        self.save_dir = Path(results.save_dir)
+        best = self.save_dir / "weights" / "best.pt"
         self.config.output.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(best, self.config.output)
         return self.config.output
@@ -129,6 +136,7 @@ def main() -> None:
     for name, value in trainer.evaluate(model_path).items():
         print(f"  {name}: {value:.3f}")
     print(f"\nTo use it: FALL_MODEL={model_path} in .env")
+    print(f"Resultados del entrenamiento en: {trainer.save_dir}")
 
 
 if __name__ == "__main__":
