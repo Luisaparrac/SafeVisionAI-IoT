@@ -163,6 +163,21 @@ ver el video.
 **Importante:** el servidor no tiene contraseña, escucha en toda la red local y permite solicitudes
 desde cualquier origen. Úsalo solo en una red de confianza.
 
+## Resultados
+
+Prueba con 6 videos nunca vistos, separados por video completo:
+
+| Configuración | Aciertos | Porcentaje | Falsas alarmas |
+|---|---|---|---|
+| Antes: sin modelo entrenado | 3 de 6 | 50 % | 0 |
+| Después: con modelo entrenado | 6 de 6 | 100 % | 0 |
+
+El clasificador niño/adulto obtuvo una exactitud de **85,6 %** (top1_acc 0.856) en validación.
+
+**Limitaciones:** son pocos videos, solo uno es de actividad normal y todos son del mismo entorno.
+Estos resultados no garantizan el mismo desempeño en otras casas o con otras personas. El detalle está
+en [training/README.md](training/README.md) y [docs/modelos.md](docs/modelos.md).
+
 ## Diseño orientado a objetos
 
 Cada clase tiene una sola responsabilidad y está en su propio archivo.
