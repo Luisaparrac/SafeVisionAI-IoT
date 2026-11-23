@@ -66,8 +66,9 @@ de la cámara y los eventos. Cada evento guarda una foto de evidencia en la carp
 | Modelo | Qué detecta |
 |---|---|
 | `yolo11n-pose.pt` (YOLO Pose) | Personas y sus 17 puntos del cuerpo: hombros, caderas, rodillas, tobillos… |
-| `yolo11n.pt` (YOLO detección) | Perros, gatos y aves |
+| `yolo11n.pt` (YOLO detección) | Perros, gatos, aves y muebles (silla, sofá, cama, mesa) |
 | `models/fall_model.pt` (opcional) | Personas caídas; es el modelo entrenado por el equipo (ver `training/`) |
+| `models/child_model.pt` (opcional) | Clasificador niño/adulto entrenado por el equipo (ver `training/`) |
 
 Los modelos de YOLO vienen preentrenados con el dataset COCO y se descargan solos la primera vez.
 Los detectores usan **ByteTrack** para asignar un número a cada persona o animal y seguirlo entre
