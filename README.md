@@ -351,3 +351,29 @@ las dependencias mínimas de `requirements-dev.txt` y sin ultralytics.
   exactitud). La votación reduce ese error, pero no lo elimina.
 - Los modelos se probaron con pocos videos del mismo entorno.
 - El video y las evidencias solo se ven en el equipo local, salvo que `VIDEO_HOST` se abra a la red.
+
+## Estructura del repositorio
+
+```
+SafeVisionAI-IoT/
+├── .github/workflows/   pruebas automáticas
+├── docs/                fichas de modelos y arquitectura
+├── models/              modelos entrenados (no se suben)
+├── safevision_iot/      cámara, backend, eventos y video en vivo
+│   └── vision/          detectores, seguimiento, postura, reglas y pipeline
+├── tests/               pruebas automáticas
+├── training/            entrenamiento, evaluación y resultados
+├── .env.example         plantilla de configuración
+├── CHANGELOG.md         historial de cambios
+├── SECURITY.md          política de seguridad
+├── requirements.txt     dependencias del módulo
+└── requirements-dev.txt dependencias mínimas de pruebas
+```
+
+## Créditos y licencias de datos
+
+| Recurso | Uso | Licencia |
+|---|---|---|
+| [CHILD ADULT DATASET](https://universe.roboflow.com/vallabha-group-of-companies/child-adult-dataset), Vallabha Group of Companies, Roboflow Universe | Clasificador niño/adulto | MIT |
+| Fotos propias de la cámara Tapo C110, etiquetadas en Roboflow | Modelo de caídas | Datos del proyecto, no publicados |
+| [Ultralytics YOLO](https://github.com/ultralytics/ultralytics) | Modelos preentrenados y entrenamiento | AGPL-3.0 |
