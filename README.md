@@ -1,5 +1,12 @@
 # SafeVision AI — Módulo IoT
 
+> Proyecto final de **Estructuras de Datos**, Ingeniería de Software, Universidad Cooperativa de
+> Colombia.
+>
+> Repositorios relacionados:
+> [SafeVisionAI-backend](https://github.com/Luisaparrac/SafeVisionAI-backend) ·
+> [SafeVisionAI-Frontend](https://github.com/Luisaparrac/SafeVisionAI-Frontend)
+
 Módulo que conecta la cámara de seguridad **TP-Link Tapo C110** con SafeVision AI y analiza su
 video con inteligencia artificial. Mantiene la cámara conectada, informa al sistema si está en línea,
 detecta situaciones de riesgo con **YOLO** y las registra como eventos en la base de datos a través
@@ -17,6 +24,22 @@ del backend.
 
 La IA entrega una **detección preventiva**: reconoce patrones visibles de movimiento, no hace
 diagnósticos médicos.
+
+## Contenido
+
+- [Lugar en la arquitectura](#lugar-en-la-arquitectura)
+- [Cómo funciona la IA](#cómo-funciona-la-ia)
+- [Travesuras de niños y mascotas](#travesuras-de-niños-y-mascotas)
+- [Video en vivo en el panel web](#video-en-vivo-en-el-panel-web)
+- [Resultados](#resultados)
+- [Diseño orientado a objetos](#diseño-orientado-a-objetos)
+- [Estructuras de datos](#estructuras-de-datos)
+- [Uso](#uso)
+- [Variables de configuración](#variables-de-configuración)
+- [Pruebas](#pruebas)
+- [Alcance y limitaciones](#alcance-y-limitaciones)
+- [Estructura del repositorio](#estructura-del-repositorio)
+- [Créditos y licencias de datos](#créditos-y-licencias-de-datos)
 
 ## Lugar en la arquitectura
 
