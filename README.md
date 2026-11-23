@@ -343,7 +343,11 @@ las dependencias mínimas de `requirements-dev.txt` y sin ultralytics.
 
 - La cámara está fija y el análisis es en 2D; las caídas de frente a la cámara son más difíciles de
   ver que las laterales.
-- Para mascotas se detectan zona restringida e inmovilidad. Las caídas de mascotas desde muebles
+- Para mascotas se detectan zona restringida, inmovilidad y permanencia sobre muebles. Las caídas de mascotas desde muebles
   requerirían un modelo entrenado para eso.
 - Los umbrales se ajustan según la ubicación de la cámara; los valores por defecto son un punto de
   partida.
+- El clasificador niño/adulto se equivoca en cerca de 1 de cada 7 imágenes de validación (85,6 % de
+  exactitud). La votación reduce ese error, pero no lo elimina.
+- Los modelos se probaron con pocos videos del mismo entorno.
+- El video y las evidencias solo se ven en el equipo local, salvo que `VIDEO_HOST` se abra a la red.
