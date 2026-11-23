@@ -160,8 +160,15 @@ El módulo **no envía el video al backend**: se sirve desde el computador local
 está publicado en HTTPS, Chrome pide el permiso de **acceso a la red local**; hay que permitirlo para
 ver el video.
 
-**Importante:** el servidor no tiene contraseña, escucha en toda la red local y permite solicitudes
-desde cualquier origen. Úsalo solo en una red de confianza.
+**`VIDEO_HOST`** define quién puede conectarse:
+
+| Valor | Alcance |
+|---|---|
+| `127.0.0.1` (por defecto) | Solo este PC |
+| `0.0.0.0` | Toda la red local; úsalo solo en una red de confianza |
+
+El servidor no tiene contraseña y permite solicitudes desde cualquier origen, así que concede el
+permiso de red local solo al panel de SafeVision AI. Más detalles en [SECURITY.md](SECURITY.md).
 
 ## Resultados
 
