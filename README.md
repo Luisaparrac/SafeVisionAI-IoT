@@ -326,6 +326,19 @@ hardware, modelos ni internet. Verifican, entre otras cosas, que:
 - una mascota que permanece en una zona genere el evento, y una que solo la cruza, no;
 - el estado de la cámara se reporte al conectarse, al desconectarse y en el latido periódico.
 
+Hoy son **96 pruebas**. También cubren:
+
+- **Travesuras:** mascota sobre mueble, niño subido a mueble y niño en zona de riesgo, incluidos los
+  casos que no deben disparar;
+- **Votación de edad:** mínimo de votos, mayoría y límite de clasificaciones por segundo;
+- **Video:** MJPEG, límite de cuadros y `127.0.0.1` por defecto;
+- **Evidencias:** solo se sirven archivos `.jpg` y se rechazan rutas con `../`;
+- **Rutas de Roboflow:** datasets con `../train/images` y creación de la validación.
+
+`tests/test_no_secrets.py` revisa los archivos rastreados por git y falla si encuentra una clave o una
+contraseña de cámara. **GitHub Actions** corre todas las pruebas en cada `push` y `pull_request`, con
+las dependencias mínimas de `requirements-dev.txt` y sin ultralytics.
+
 ## Alcance y limitaciones
 
 - La cámara está fija y el análisis es en 2D; las caídas de frente a la cámara son más difíciles de
