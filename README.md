@@ -260,6 +260,49 @@ copian a `models/`:
 
 Los modelos preentrenados de YOLO se descargan solos la primera vez.
 
+## Variables de configuración
+
+Se definen en `.env`. Si una variable no está, se usa el valor por defecto.
+
+| Variable | Por defecto | Para qué sirve |
+|---|---|---|
+| `CAMERA_RTSP_URL` | vacío | Dirección RTSP de la cámara, con su usuario y contraseña |
+| `CAMERA_ID` | `1` | `camera_id` de la cámara en el backend |
+| `BACKEND_URL` | `http://localhost:8000` | Dirección del backend |
+| `IOT_API_KEY` | vacío | Clave del módulo IoT para el backend |
+| `AI_ENABLED` | `true` | Activa el análisis con IA |
+| `POSE_MODEL` | `yolo11n-pose.pt` | Modelo de personas y puntos del cuerpo |
+| `ANIMAL_MODEL` | `yolo11n.pt` | Modelo de mascotas y muebles |
+| `FALL_MODEL` | vacío | Modelo de caídas; vacío = solo YOLO Pose y reglas |
+| `ANALYSIS_FPS` | `5` | Cuadros analizados por segundo |
+| `PERSON_SUBJECT_ID` | vacío | `subject_id` de la persona supervisada |
+| `PET_SUBJECT_ID` | vacío | `subject_id` de la mascota supervisada |
+| `CHILD_MODEL` | vacío | Clasificador niño/adulto; vacío = desactivado |
+| `CHILD_MIN_VOTES` | `5` | Votos necesarios para decidir si una persona es un niño |
+| `CHILD_SUBJECT_ID` | vacío | `subject_id` del niño supervisado |
+| `FALL_WINDOW_SECONDS` | `1.5` | Tiempo máximo para pasar de pie a acostado |
+| `FALL_DROP_RATIO` | `0.3` | Bajada mínima de la cadera, como fracción de la altura de pie |
+| `FALL_CONFIRM_SECONDS` | `2` | Segundos en el suelo para confirmar la caída |
+| `ABNORMAL_SPEED` | `0.8` | Velocidad de muñeca de un movimiento brusco, en alturas de cuerpo por segundo |
+| `ABNORMAL_MIN_PEAKS` | `5` | Movimientos bruscos necesarios |
+| `ABNORMAL_WINDOW_SECONDS` | `3` | Ventana en la que deben ocurrir esos movimientos |
+| `ABNORMAL_MAX_HIP_SPEED` | `0.5` | Ignora movimientos si la cadera se mueve más rápido que esto |
+| `ABNORMAL_SETTLE_SECONDS` | `1` | Ignora movimientos si la persona queda acostada en estos segundos |
+| `PERSON_IMMOBILITY_SECONDS` | `60` | Límite de inmovilidad de una persona |
+| `PET_IMMOBILITY_SECONDS` | `1800` | Límite de inmovilidad de una mascota |
+| `ZONE_DWELL_SECONDS` | `2` | Permanencia necesaria en una zona restringida |
+| `PET_FURNITURE_SECONDS` | `3` | Tiempo de una mascota sobre un mueble |
+| `CHILD_FURNITURE_SECONDS` | `2` | Tiempo de un niño sobre un mueble |
+| `EVENT_COOLDOWN_SECONDS` | `60` | Tiempo mínimo entre eventos iguales del mismo sujeto |
+| `ZONES_REFRESH_SECONDS` | `300` | Cada cuánto se recargan las zonas del backend |
+| `EVIDENCE_DIR` | `evidence` | Carpeta de las fotos de evidencia |
+| `VIDEO_HOST` | `127.0.0.1` | `127.0.0.1` = solo este PC; `0.0.0.0` = toda la red local |
+| `VIDEO_PORT` | `8080` | Puerto del video en vivo |
+| `EVIDENCE_BASE_URL` | vacío | Dirección base de las fotos; vacío = no envía `evidence_url` |
+| `HEARTBEAT_SECONDS` | `30` | Cada cuánto se reporta el estado de la cámara |
+| `RECONNECT_SECONDS` | `5` | Espera antes de reconectar la cámara |
+| `REQUEST_TIMEOUT` | `90` | Tiempo máximo de cada petición al backend |
+
 ## Pruebas
 
 ```bash
