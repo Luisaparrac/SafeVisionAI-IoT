@@ -114,6 +114,11 @@ caídas en formato YOLO; esa técnica se llama *transfer learning*. Al configura
 `FALL_MODEL=models/fall_model.pt`, el módulo usa ese modelo **además** de las reglas: una caída se
 confirma cuando el modelo marca a la persona como caída durante 2 s.
 
+También se entrena un **clasificador niño/adulto** con YOLO11n-cls. Al configurar
+`CHILD_MODEL=models/child_model.pt`, el módulo clasifica a cada persona y decide por mayoría de
+votos. Los datos, las métricas y las limitaciones de cada modelo están en
+[docs/modelos.md](docs/modelos.md).
+
 ## Travesuras de niños y mascotas
 
 La detección funciona en dos etapas:
