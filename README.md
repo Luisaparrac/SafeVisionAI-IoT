@@ -226,11 +226,11 @@ Principios aplicados:
 
 Requisitos: Python 3.10 o superior y un computador en la **misma red** que la cámara.
 
-```bash
+```powershell
 python -m venv .venv
-.venv\Scripts\activate
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-copy .env.example .env
+Copy-Item .env.example .env
 ```
 
 En `.env` se configuran la dirección RTSP de la cámara, su `camera_id`, la URL del backend, la clave
@@ -247,6 +247,18 @@ del módulo IoT y, si se quiere, el `subject_id` de la persona y de la mascota s
 | `python -m safevision_iot analyze-video video.mp4 --show` | Analiza un video grabado (para pruebas y demostraciones) |
 
 Agregar `--dry-run` a `run` o `analyze-video` detecta sin enviar eventos al backend.
+
+### Cómo obtener los modelos
+
+Los modelos propios **no están en el repositorio**. Se entrenan con los cuadernos de `training/` y se
+copian a `models/`:
+
+| Modelo | Cuaderno | Archivo | Variable en `.env` |
+|---|---|---|---|
+| Caídas | `training/train_fall_model.ipynb` | `models/fall_model.pt` | `FALL_MODEL=models/fall_model.pt` |
+| Niño/adulto | `training/train_child_model.ipynb` | `models/child_model.pt` | `CHILD_MODEL=models/child_model.pt` |
+
+Los modelos preentrenados de YOLO se descargan solos la primera vez.
 
 ## Pruebas
 
