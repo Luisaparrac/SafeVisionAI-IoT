@@ -2,10 +2,6 @@
 
 > Proyecto final de **Estructuras de Datos**, Ingeniería de Software, Universidad Cooperativa de
 > Colombia.
->
-> Repositorios relacionados:
-> [SafeVisionAI-backend](https://github.com/Luisaparrac/SafeVisionAI-backend) ·
-> [SafeVisionAI-Frontend](https://github.com/Luisaparrac/SafeVisionAI-Frontend)
 
 Módulo que conecta la cámara de seguridad **TP-Link Tapo C110** con SafeVision AI y analiza su
 video con inteligencia artificial. Mantiene la cámara conectada, informa al sistema si está en línea,
